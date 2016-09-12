@@ -16,7 +16,7 @@ import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.algorithm.gauss3.Gauss3;
 import net.imglib2.algorithm.gradient.PartialDerivative;
 import net.imglib2.algorithm.morphology.watershed.Distance;
-import net.imglib2.algorithm.morphology.watershed.WatershedIntervalGeneric;
+import net.imglib2.algorithm.morphology.watershed.Watershed;
 import net.imglib2.algorithm.neighborhood.DiamondShape;
 import net.imglib2.algorithm.neighborhood.Neighborhood;
 import net.imglib2.algorithm.neighborhood.RectangleShape;
@@ -118,7 +118,7 @@ public class WatershedsExample2DGeneric
 		{
 			final long[] markersCl = markers.clone();
 			final long t0 = System.currentTimeMillis();
-			WatershedIntervalGeneric.flood(
+			Watershed.flood(
 					Views.makeLinearIterableView( ArrayImgs.doubles( img, img.length ) ),
 					Views.makeLinearIterableView( ArrayImgs.longs( markersCl, markers.length ) ),
 					shape,
@@ -137,7 +137,7 @@ public class WatershedsExample2DGeneric
 		}
 		System.out.println( rtAccu * 1.0 / N );
 
-		WatershedIntervalGeneric.flood(
+		Watershed.flood(
 				Views.makeLinearIterableView( ArrayImgs.doubles( img, img.length ) ),
 				Views.makeLinearIterableView( ArrayImgs.longs( markers, markers.length ) ),
 				shape,

@@ -5,6 +5,12 @@ import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.util.Arrays;
 
+import net.imglib2.RandomAccess;
+import net.imglib2.algorithm.morphology.watershed.flat.FlatViews;
+import net.imglib2.img.array.ArrayImg;
+import net.imglib2.img.array.ArrayImgs;
+import net.imglib2.img.basictypeaccess.array.LongArray;
+import net.imglib2.type.numeric.integer.LongType;
 import sun.misc.Unsafe;
 
 @SuppressWarnings( "restriction" )
@@ -140,6 +146,24 @@ public class Dummy
 						tUnsafe * 1.0 / N1 + " " + tUnsafeW * 1.0 / N1 + " " +
 						tDouble * 1.0 / N1 + " " + tDoubleR * 1.0 / N1 + " " +
 						tDoubleInv * 1.0 / N1 );
+
+		final ArrayImg< LongType, LongArray > img = ArrayImgs.longs( 20, 30 );
+		long l = 1;
+		for ( final LongType i : img )
+		{
+			i.set( l++ );
+		}
+		final RandomAccess< LongType > fa = FlatViews.flatten( img ).randomAccess();
+		l = 0;
+		for ( final LongType i : img )
+		{
+			fa.setPosition( l, 0 );
+			if ( !i.valueEquals( fa.get() ) )
+			{
+				System.out.println( i + " " + fa.get() );
+			}
+			++l;
+		}
 
 	}
 }

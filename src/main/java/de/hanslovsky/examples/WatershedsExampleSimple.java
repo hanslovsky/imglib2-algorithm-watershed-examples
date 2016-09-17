@@ -1,6 +1,5 @@
 package de.hanslovsky.examples;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import ij.ImageJ;
@@ -24,8 +23,8 @@ import net.imglib2.img.array.ArrayCursor;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.array.ArrayImgs;
+import net.imglib2.img.array.ArrayRandomAccess;
 import net.imglib2.img.basictypeaccess.array.DoubleArray;
-import net.imglib2.img.basictypeaccess.array.FloatArray;
 import net.imglib2.img.basictypeaccess.array.LongArray;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.type.NativeType;
@@ -33,13 +32,11 @@ import net.imglib2.type.numeric.IntegerType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.LongType;
 import net.imglib2.type.numeric.real.DoubleType;
-import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.IntervalIndexer;
-import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
 import net.imglib2.view.Views;
 
-public class WatershedsExample2DGeneric
+public class WatershedsExampleSimple
 {
 
 	public static double euclidianSquared( final long pos1, final long pos2, final long[] dim )
@@ -62,83 +59,57 @@ public class WatershedsExample2DGeneric
 	{
 
 		new ImageJ();
-//		final String url = "https://cdn1.partner.hp.com/hpi-cpp-default-theme/images/common/Icon_Refresh.png";
-		final String url = "http://img.autobytel.com/car-reviews/autobytel/11694-good-looking-sports-cars/2016-Ford-Mustang-GT-burnout-red-tire-smoke.jpg";
-//		final String url = "http://mediad.publicbroadcasting.net/p/wuwm/files/styles/medium/public/201402/LeAnn_Crowe.jpg";
-		final ImagePlus imp = new ImagePlus( url );
 
-		final ArrayImg< FloatType, FloatArray > source = ArrayImgs.floats( ( float[] ) imp.getProcessor().convertToFloatProcessor().getPixels(), imp.getWidth(), imp.getHeight() );
-		final ArrayImg< DoubleType, DoubleArray >[] gradients = gradientsAndMagnitude( source, 1.0 );
+		final int w = 5;
+		final int h = 4;
+		final long[] markers = new long[ w * h ];
 
-//		final double[] img = new double[ imp.getWidth() * imp.getHeight() ];
-		final double[] img = new double[ imp.getWidth() * imp.getHeight() ];
-
-		final ArrayCursor< DoubleType > c = gradients[ 2 ].cursor();
-		for ( int i = 0; i < img.length; ++i )
+		final ArrayImg< DoubleType, DoubleArray > gradient = ArrayImgs.doubles( w, h );
+		for ( final ArrayCursor< DoubleType > g = gradient.cursor(); g.hasNext(); )
 		{
-			img[ i ] = c.next().getRealDouble();
+			g.fwd();
+			if ( g.getIntPosition( 0 ) == g.getIntPosition( 1 ) )
+			{
+				g.get().set( 255.0 );
+			}
 		}
 
-		final long[] markers = new long[ img.length ];
+		final ArrayImg< LongType, LongArray > markersWrapped = ArrayImgs.longs( markers, w, h );
+		final ArrayRandomAccess< LongType > acc = markersWrapped.randomAccess();
 
-		final ArrayImg< LongType, LongArray > markersWrapped = ArrayImgs.longs( markers, imp.getWidth(), imp.getHeight() );
-
-		final long seedPointSpacing = 20l;
-		seedsGrid( markersWrapped, seedPointSpacing, 1, new ArrayList<>() );
+		acc.setPosition( new int[] { 0, 1 } );
+		acc.get().set( 1 );
+		acc.setPosition( new int[] { 1, 0 } );
+		acc.get().set( 2 );
 
 		final DiamondShape shape = new DiamondShape( 1 );
 //		final RectangleShape shape = new RectangleShape( 1, true );
 
 		final Watershed.StoreageFactory< LongType > fac = ( final long size, final LongType t ) -> ArrayImgs.longs( size );
 
-		final long[] dim = Intervals.dimensionsAsLongArray( markersWrapped );
-		final double weight = 0.3;
+		final double weight = 0.00;
 		final Distance< DoubleType > dist = ( comparison, reference, position, seedPosition, numberOfSteps ) -> comparison.get() + weight * numberOfSteps;
 //		final Distance< DoubleType > dist =
 //				( comparison, reference, position, seedPosition, numberOfSteps ) -> comparison.get() + weight * Math.sqrt( euclidianSquared( position, seedPosition, dim ) );
 
-		ImageJFunctions.show( gradients[ 2 ], "grad" );
-		final int N = 10;
-		long rtAccu = 0;
-		for ( int i = 0; i < N; ++i )
-		{
-			final long[] markersCl = markers.clone();
-			final long t0 = System.currentTimeMillis();
-			Watershed.flood(
-					ArrayImgs.doubles( img, imp.getWidth(), imp.getHeight() ),
-					ArrayImgs.longs( markersCl, imp.getWidth(), imp.getHeight() ),
-					shape,
-					new LongType( 0l ),
-					new LongType( -1l ),
-					dist,
-					fac );
-			final long t1 = System.currentTimeMillis();
-			final long rt = t1 - t0;
-			if ( i > 0 )
-			{
-				rtAccu += rt;
-			}
-			System.out.println( "Runtime : " + rt );
-		}
-		System.out.println( rtAccu * 1.0 / N );
+		ImageJFunctions.show( gradient, "grad" );
 
 		Watershed.flood(
-				ArrayImgs.doubles( img, imp.getWidth(), imp.getHeight() ),
-				ArrayImgs.longs( markers, imp.getWidth(), imp.getHeight() ),
+				gradient,
+				ArrayImgs.longs( markers, w, h ),
 				shape,
 				new LongType( 0l ),
 				new LongType( -1l ),
 				dist,
 				fac );
-		ImageJFunctions.show( ArrayImgs.longs( markers, imp.getWidth(), imp.getHeight() ) );
-		final LongType bg = markersWrapped.firstElement().createVariable();
-		bg.set( -1l );
-		final ArrayImg< LongType, ? > seedsGradient =
-				makeSeedsGradient( ArrayImgs.longs( markers, imp.getWidth(), imp.getHeight() ), bg );
-		ImageJFunctions.show( seedsGradient, "labels" );
-		overlay( imp, seedsGradient, bg );
+		ImageJFunctions.show( ArrayImgs.longs( markers, w, h ) );
+//		final LongType bg = markersWrapped.firstElement().createVariable();
+//		bg.set( -1l );
+//		final ArrayImg< LongType, ? > seedsGradient =
+//				makeSeedsGradient( ArrayImgs.longs( markers, w, h ), bg );
+//		ImageJFunctions.show( seedsGradient, "labels" );
+//		overlay( imp, seedsGradient, bg );
 
-		imp.show();
 
 	}
 

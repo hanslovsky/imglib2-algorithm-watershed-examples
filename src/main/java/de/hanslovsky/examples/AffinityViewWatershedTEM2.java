@@ -60,7 +60,7 @@ public class AffinityViewWatershedTEM2
 		final long[] dimsWithEdges = new long[] { 300, 300, 100, 6 };
 		final long[] labelsDims = new long[] { 300, 300, 100 };
 		final int[] perm = new int[] { 2, 1, 0 };
-		final CellImg< FloatType, ?, ? > data = H5Utils.loadFloat( "/home/phil/Dropbox/misc/excerpt.h5", "main", new int[] { 300, 300, 100, 3 } );
+		final CellImg< FloatType, ?, ? > data = H5Utils.loadFloat( Util.HOME_DIR + "/Dropbox/misc/excerpt.h5", "main", new int[] { 300, 300, 100, 3 } );
 		System.out.println( Arrays.toString( Intervals.dimensionsAsLongArray( data ) ) );
 		final ArrayImg< DoubleType, DoubleArray > affs = ArrayImgs.doubles( dims );
 		for ( final Pair< FloatType, DoubleType > p : Views.interval( Views.pair( Views.permuteCoordinates( data, perm, 3 ), affs ), affs ) )

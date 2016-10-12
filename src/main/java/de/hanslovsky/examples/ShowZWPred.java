@@ -38,8 +38,8 @@ public class ShowZWPred
 
 	public static void main( final String[] args )
 	{
-		final String probPath = "/home/phil/Dropbox/misc/excerpt.h5";
-		final String predPath = "/home/phil/Dropbox/misc/excerpt-pred.h5";
+		final String probPath = Util.HOME_DIR + "/Dropbox/misc/excerpt.h5";
+		final String predPath = Util.HOME_DIR + "/home/phil/Dropbox/misc/excerpt-pred.h5";
 
 		final long[] dims = new long[] { 300, 300, 100, 3 };
 		final long[] labelsDims = new long[] { 300, 300, 100 };

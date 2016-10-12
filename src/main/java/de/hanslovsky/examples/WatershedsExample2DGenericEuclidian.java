@@ -107,7 +107,7 @@ public class WatershedsExample2DGenericEuclidian
 		final double weight = 1.0;
 //		final Distance< DoubleType > dist = ( comparison, reference, position, seedPosition, numberOfSteps )
 //				-> comparison.get() + weight * numberOfSteps;
-		final Distance< DoubleType > dist = ( comparison, reference, position, seedPosition, numberOfSteps, i ) -> {
+		final Distance< DoubleType > dist = ( comparison, reference, position, seedPosition, numberOfSteps ) -> {
 			return comparison.get() + weight * Math.sqrt( euclidianSquared( position, seedPosition, dim ) );
 		};
 

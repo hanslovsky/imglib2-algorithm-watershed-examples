@@ -6,7 +6,6 @@ import java.util.List;
 import ij.ImageJ;
 import ij.ImagePlus;
 import ij.process.ColorProcessor;
-import it.unimi.dsi.fastutil.longs.LongBigArrayBigList;
 import net.imglib2.Cursor;
 import net.imglib2.Localizable;
 import net.imglib2.Point;
@@ -16,8 +15,8 @@ import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.algorithm.gauss3.Gauss3;
 import net.imglib2.algorithm.gradient.PartialDerivative;
 import net.imglib2.algorithm.morphology.watershed.Distance;
-import net.imglib2.algorithm.morphology.watershed.HierarchicalPriorityQueueIntHeaps;
 import net.imglib2.algorithm.morphology.watershed.PriorityQueueFactory;
+import net.imglib2.algorithm.morphology.watershed.PriorityQueueFastUtil;
 import net.imglib2.algorithm.morphology.watershed.Watershed;
 import net.imglib2.algorithm.neighborhood.DiamondShape;
 import net.imglib2.algorithm.neighborhood.Neighborhood;
@@ -33,7 +32,6 @@ import net.imglib2.img.basictypeaccess.array.FloatArray;
 import net.imglib2.img.basictypeaccess.array.LongArray;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.type.NativeType;
-import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.IntegerType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.LongType;
@@ -44,7 +42,7 @@ import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
 import net.imglib2.view.Views;
 
-public class WatershedsExample2DGeneric
+public class WatershedsExample2DGenericEuclidian
 {
 
 	public static double euclidianSquared( final long pos1, final long pos2, final long[] dim )
@@ -68,28 +66,37 @@ public class WatershedsExample2DGeneric
 
 		new ImageJ();
 //		final String url = "https://cdn1.partner.hp.com/hpi-cpp-default-theme/images/common/Icon_Refresh.png";
-//		final String url = "http://img.autobytel.com/car-reviews/autobytel/11694-good-looking-sports-cars/2016-Ford-Mustang-GT-burnout-red-tire-smoke.jpg";
+		final String url = "http://img.autobytel.com/car-reviews/autobytel/11694-good-looking-sports-cars/2016-Ford-Mustang-GT-burnout-red-tire-smoke.jpg";
 //		final String url = "http://mediad.publicbroadcasting.net/p/wuwm/files/styles/medium/public/201402/LeAnn_Crowe.jpg";
 //		final String url = "/home/hanslovskyp/local/tmp/watershed-test/20mp.jpg";
-		final String url = "/home/hanslovskyp/local/tmp/butterfly.jpg";
 		final ImagePlus imp = new ImagePlus( url );
 
 		final ArrayImg< FloatType, FloatArray > source = ArrayImgs.floats( ( float[] ) imp.getProcessor().convertToFloatProcessor().getPixels(), imp.getWidth(), imp.getHeight() );
 		final ArrayImg< DoubleType, DoubleArray >[] gradients = gradientsAndMagnitude( source, 1.0 );
+
+		double min = Double.MAX_VALUE;
+		double max = -min;
+		for ( final DoubleType g : gradients[ 2 ] )
+		{
+			min = Math.min( g.get(), min );
+			max = Math.max( g.get(), max );
+		}
+
+		System.out.println( max + " " + min );
 
 //		final double[] img = new double[ imp.getWidth() * imp.getHeight() ];
 		final double[] img = new double[ imp.getWidth() * imp.getHeight() ];
 
 		final ArrayCursor< DoubleType > c = gradients[ 2 ].cursor();
 		for ( int i = 0; i < img.length; ++i )
-			img[ i ] = c.next().getRealDouble();
+			img[ i ] = ( c.next().getRealDouble() - min ) / ( max - min ) * 255;
 
 		final long[] markers = new long[ img.length ];
 
 		final ArrayImg< LongType, LongArray > markersWrapped = ArrayImgs.longs( markers, imp.getWidth(), imp.getHeight() );
 
-		final long seedPointSpacing = 40l;
-		final long nextSeed = seedsGrid( markersWrapped, seedPointSpacing, 1, new ArrayList<>() );
+		final long seedPointSpacing = 20l;
+		seedsGrid( markersWrapped, seedPointSpacing, 1, new ArrayList<>() );
 
 		final DiamondShape shape = new DiamondShape( 1 );
 //		final RectangleShape shape = new RectangleShape( 1, true );
@@ -97,16 +104,38 @@ public class WatershedsExample2DGeneric
 		final Watershed.StoreageFactory< LongType > fac = ( final long size, final LongType t ) -> ArrayImgs.longs( size );
 
 		final long[] dim = Intervals.dimensionsAsLongArray( markersWrapped );
-		final double weight = 0.0;
-		final Distance< DoubleType > dist = ( comparison, reference, position, seedPosition, numberOfSteps, i ) -> comparison.get() + weight * numberOfSteps;
-//		final Distance< DoubleType > dist =
-//				( comparison, reference, position, seedPosition, numberOfSteps ) -> comparison.get() + weight * Math.sqrt( euclidianSquared( position, seedPosition, dim ) );
+		final double weight = 1.0;
+//		final Distance< DoubleType > dist = ( comparison, reference, position, seedPosition, numberOfSteps )
+//				-> comparison.get() + weight * numberOfSteps;
+		final Distance< DoubleType > dist = ( comparison, reference, position, seedPosition, numberOfSteps, i ) -> {
+			return comparison.get() + weight * Math.sqrt( euclidianSquared( position, seedPosition, dim ) );
+		};
 
-		final PriorityQueueFactory fac2 = new HierarchicalPriorityQueueIntHeaps.Factory( 1024 * 4 );
-//		final PriorityQueueFactory fac2 = PriorityQueueFastUtil.FACTORY;
+//		final PriorityQueueFactory fac2 = new HierarchicalPriorityQueueIntHeaps.Factory( 1024 * 4 );
+		final PriorityQueueFactory fac2 = PriorityQueueFastUtil.FACTORY;
 
 		ImageJFunctions.show( gradients[ 2 ], "grad" );
-		final int N = 1;
+
+		final int nWarmup = 10;
+		for ( int i = 0; i < nWarmup; ++i )
+		{
+			final long[] markersCl = markers.clone();
+			final long t0 = System.currentTimeMillis();
+			Watershed.flood(
+					ArrayImgs.doubles( img, imp.getWidth(), imp.getHeight() ),
+					ArrayImgs.longs( markersCl, imp.getWidth(), imp.getHeight() ),
+					shape,
+					new LongType( 0l ),
+					new LongType( -1l ),
+					dist,
+					fac,
+					fac2 );
+			final long t1 = System.currentTimeMillis();
+			final long rt = t1 - t0;
+			System.out.println( "Runtime (warmup) : " + rt );
+		}
+
+		final int N = 20;
 		long rtAccu = 0;
 		for ( int i = 0; i < N; ++i )
 		{
@@ -123,8 +152,7 @@ public class WatershedsExample2DGeneric
 					fac2 );
 			final long t1 = System.currentTimeMillis();
 			final long rt = t1 - t0;
-			if ( i > 0 )
-				rtAccu += rt;
+			rtAccu += rt;
 			System.out.println( "Runtime : " + rt );
 		}
 		System.out.println( rtAccu * 1.0 / N );
@@ -148,51 +176,9 @@ public class WatershedsExample2DGeneric
 
 		imp.show();
 
-		final LongBigArrayBigList rs = new LongBigArrayBigList( nextSeed + 1 );
-		final LongBigArrayBigList gs = new LongBigArrayBigList( nextSeed + 1 );
-		final LongBigArrayBigList bs = new LongBigArrayBigList( nextSeed + 1 );
-		final LongBigArrayBigList counts = new LongBigArrayBigList( nextSeed + 1 );
-
-		for ( long s = 1; s < nextSeed + 1; ++s )
-		{
-			counts.add( 0 );
-			rs.add( 0 );
-			gs.add( 0 );
-			bs.add( 0 );
-		}
-
-		final ImagePlus imp2 = new ImagePlus( url );
-		for ( final Pair< ARGBType, LongType > pair : Views.flatIterable( Views.interval( Views.pair( ImageJFunctions.wrapRGBA( imp2 ), markersWrapped ), markersWrapped ) ) )
-		{
-			final long index = pair.getB().get();
-			if ( index < 0 )
-				continue;
-			final int color = pair.getA().get();
-
-			counts.set( index, counts.getLong( index ) + 1 );
-			rs.set( index, rs.getLong( index ) + ARGBType.red( color ) );
-			gs.set( index, gs.getLong( index ) + ARGBType.green( color ) );
-			bs.set( index, bs.getLong( index ) + ARGBType.blue( color ) );
-		}
-
-		for ( final Pair< ARGBType, LongType > pair : Views.flatIterable( Views.interval( Views.pair( ImageJFunctions.wrapRGBA( imp2 ), markersWrapped ), markersWrapped ) ) )
-		{
-			final long index = pair.getB().get();
-			if ( index < 0 )
-				continue;
-			final long count = counts.getLong( index );
-			pair.getA().set( ARGBType.rgba(
-					( int ) rs.getLong( index ) / count,
-					( int ) gs.getLong( index ) / count,
-					( int ) bs.getLong( index ) / count,
-					255 ) );
-		}
-
-		imp2.show();
-
 	}
 
-	public static < T extends IntegerType< T > > long seedsGrid( final RandomAccessibleInterval< T > seeds, final long stride, final long startSeed )
+	public static < T extends IntegerType< T > > void seedsGrid( final RandomAccessibleInterval< T > seeds, final long stride, final long startSeed )
 	{
 		long seed = startSeed;
 
@@ -206,7 +192,6 @@ public class WatershedsExample2DGeneric
 			for ( long x = start; x < seeds.dimension( 0 ); x += stride, seedsAccess.move( stride, 0 ) )
 				seedsAccess.get().setInteger( seed++ );
 		}
-		return seed;
 	}
 
 	public static < T extends IntegerType< T >, U extends RealType< U > >
@@ -268,7 +253,7 @@ public class WatershedsExample2DGeneric
 		return gradients;
 	}
 
-	public static < T extends IntegerType< T > > long seedsGrid( final RandomAccessibleInterval< T > seeds, final long stride, final int startSeed, final List< Localizable > seedList )
+	public static < T extends IntegerType< T > > void seedsGrid( final RandomAccessibleInterval< T > seeds, final long stride, final int startSeed, final List< Localizable > seedList )
 	{
 		long seed = startSeed;
 
@@ -285,7 +270,6 @@ public class WatershedsExample2DGeneric
 				seedsAccess.get().setInteger( seed++ );
 			}
 		}
-		return seed;
 	}
 
 	public static < T extends IntegerType< T > & NativeType< T > > ArrayImg< T, ? > makeSeedsGradient(

@@ -3,6 +3,12 @@ package de.hanslovsky.examples;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
+import org.graphstream.graph.Node;
+import org.graphstream.graph.implementations.MultiGraph;
+import org.graphstream.ui.view.Viewer;
+import org.jgrapht.graph.DefaultDirectedGraph;
+import org.jgrapht.graph.DefaultEdge;
+
 import gnu.trove.list.array.TLongArrayList;
 import ij.ImageJ;
 import ij.ImagePlus;
@@ -16,25 +22,27 @@ import net.imglib2.algorithm.gauss3.Gauss3;
 import net.imglib2.algorithm.gradient.PartialDerivative;
 import net.imglib2.algorithm.morphology.watershed.Watershed;
 import net.imglib2.algorithm.morphology.watershed.Watershed.Compare;
-import net.imglib2.algorithm.morphology.watershed.flat.FlatViews;
+import net.imglib2.algorithm.morphology.watershed.Watershed.Visitor;
 import net.imglib2.algorithm.neighborhood.Neighborhood;
 import net.imglib2.algorithm.neighborhood.RectangleShape;
 import net.imglib2.algorithm.neighborhood.RectangleShape.NeighborhoodsAccessible;
+import net.imglib2.converter.Converter;
+import net.imglib2.converter.read.ConvertedRandomAccessibleInterval;
 import net.imglib2.exception.IncompatibleTypeException;
 import net.imglib2.img.array.ArrayCursor;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.array.DoubleArray;
-import net.imglib2.img.basictypeaccess.array.FloatArray;
+import net.imglib2.img.basictypeaccess.array.IntArray;
 import net.imglib2.img.basictypeaccess.array.LongArray;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.IntegerType;
 import net.imglib2.type.numeric.RealType;
+import net.imglib2.type.numeric.integer.IntType;
 import net.imglib2.type.numeric.integer.LongType;
 import net.imglib2.type.numeric.real.DoubleType;
-import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Pair;
 import net.imglib2.view.Views;
@@ -62,55 +70,104 @@ public class WatershedsExample2DParallel
 	{
 
 		new ImageJ();
-//		final String url = "https://cdn1.partner.hp.com/hpi-cpp-default-theme/images/common/Icon_Refresh.png";
-		final String url = "http://img.autobytel.com/car-reviews/autobytel/11694-good-looking-sports-cars/2016-Ford-Mustang-GT-burnout-red-tire-smoke.jpg";
-//		final String url = "http://mediad.publicbroadcasting.net/p/wuwm/files/styles/medium/public/201402/LeAnn_Crowe.jpg";
-		final ImagePlus imp = new ImagePlus( url );
+		final int w = 10;
+		final int h = 12;
 
-		final ArrayImg< FloatType, FloatArray > source = ArrayImgs.floats( ( float[] ) imp.getProcessor().convertToFloatProcessor().getPixels(), imp.getWidth(), imp.getHeight() );
-		final ArrayImg< FloatType, FloatArray > img = ArrayImgs.floats( source.dimension( 0 ), source.dimension( 1 ) );
+		final int[] imgArray = new int[] {
+				3, 5, 5, 2, 8, 8, 8, 11, 10, 10,
+				5, 5, 11, 11, 8, 11, 11, 8, 10, 10,
+				11, 5, 11, 11, 9, 9, 9, 9, 8, 10,
+				11, 11, 11, 7, 7, 7, 7, 9, 9, 8,
+				11, 11, 11, 11, 11, 9, 7, 10, 8, 10,
+				11, 10, 11, 9, 7, 7, 9, 9, 10, 8,
+				11, 10, 11, 9, 11, 9, 10, 10, 8, 10,
+				11, 11, 11, 8, 8, 8, 8, 8, 10, 10,
+				11, 11, 11, 11, 10, 10, 10, 10, 10, 10,
+				10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
+				11, 11, 11, 11, 10, 10, 10, 10, 10, 10,
+				10, 10, 10, 10, 10, 10, 10, 10, 10, 10
+		};
 
-//		Gauss3.gauss( 3.0, source, img );
+		final ArrayImg< IntType, IntArray > img = ArrayImgs.ints( imgArray, w, h );
 
-		final ArrayImg< DoubleType, DoubleArray >[] gradients = gradientsAndMagnitude( source, 3.0 );
+		ImageJFunctions.show( img, "img" );
 
-		ImageJFunctions.show( gradients[ 2 ], "grad mag" );
+		final long[] markers = new long[ imgArray.length ];
 
-		final long[] markers = new long[ ( int ) source.size() ];
-
-		final ArrayImg< LongType, LongArray > markersWrapped = ArrayImgs.longs( markers, imp.getWidth(), imp.getHeight() );
+		final ArrayImg< LongType, LongArray > markersWrapped = ArrayImgs.longs( markers, w, h );
 
 //		final DiamondShape shape = new DiamondShape( 1 );
 		final RectangleShape shape = new RectangleShape( 1, false );
 
-		final Compare< DoubleType > comp = ( first, second ) -> first.get() < second.get();
+		final Compare< IntType > comp = ( first, second ) -> first.get() < second.get();
 
-		final TLongArrayList sp = Watershed.findBasinsAndFill( gradients[ 2 ], markersWrapped, shape, new LongType( 0 ), new LongType( -1 ), comp );
 
-		ImageJFunctions.show( ArrayImgs.longs( markers, imp.getWidth(), imp.getHeight() ) );
-		final LongType bg = markersWrapped.firstElement().createVariable();
-		bg.set( -1l );
-		final ArrayImg< LongType, ? > seedsGradient =
-				makeSeedsGradient( ArrayImgs.longs( markers, imp.getWidth(), imp.getHeight() ), bg );
-		ImageJFunctions.show( seedsGradient, "labels" );
-		overlay( imp, seedsGradient, bg );
+		final Converter< LongType, LongType > conv = ( input, output ) -> {
+			final long i = input.getIntegerLong();
+			output.set( i < 0 ? 255 + i : i );
+		};
 
-		imp.show();
+		final DefaultDirectedGraph< Long, DefaultEdge > g = new DefaultDirectedGraph<>( DefaultEdge.class );
+		final MultiGraph gs = new MultiGraph( "Connectivity" );
 
-//		for ( int i = 0; i < sp.size(); ++i )
-//			System.out.println( sp.get( i ) );
+		final Viewer viewer = gs.display();
+		viewer.disableAutoLayout();
+		gs.addAttribute( "ui.stylesheet", "node { fill-color: red; } node.marked {fill-color: black;} node.meh {fill-color:white;}" );
+
+		final Visitor vis = () -> {
+			ImageJFunctions.show( new ConvertedRandomAccessibleInterval<>( markersWrapped, conv, new LongType() ), "BLUB" );
+			for ( int y = 0, i = 0; y < h; ++y )
+				for ( int x = 0; x < w; ++x, ++i )
+				{
+					final Node n = gs.addNode( "" + i );
+					n.setAttribute( "xy", x, -y );
+					n.addAttribute( "ui.label", "" + imgArray[ i ] );
+//					System.out.println( 123 );
+//				g.addVertex( ( long ) i );
+				}
+
+			long i = 0;
+			for ( final LongType m : markersWrapped )
+			{
+				if ( m.get() != i )
+				{
+					gs.getNode( "" + i ).setAttribute( "ui.class", "marked" );
+					gs.addEdge( i + "-" + m.get(), "" + i, "" + m.get(), true );
+				}
+				else if ( m.get() == -2 )
+					gs.getNode( "" + i ).setAttribute( "ui.class", "meh" );
+				++i;
+			}
+
+		};
+
+
+		final int nThreads = 12;// Runtime.getRuntime().availableProcessors();
+
+		final TLongArrayList sp = Watershed.findBasinsAndFill( img, markersWrapped, shape, new LongType( -1 ), new LongType( -2 ), comp, nThreads, vis );
+
+		ImageJFunctions.show( new ConvertedRandomAccessibleInterval<>( ArrayImgs.longs( markers, w, h ), conv, new LongType() ) );
+
+//		final LongType bg = markersWrapped.firstElement().createVariable();
+//		bg.set( -1l );
+//		final ArrayImg< LongType, ? > seedsGradient =
+//				makeSeedsGradient( ArrayImgs.longs( markers, w, h ), bg );
+//		ImageJFunctions.show( seedsGradient, "labels" );
 
 		System.out.println( "\n" + sp.size() );
 
-		final ArrayImg< LongType, LongArray > spImage = ArrayImgs.longs( img.dimension( 0 ), img.dimension( 1 ) );
-		final RandomAccess< LongType > access = FlatViews.flatten( spImage ).randomAccess();
-		for ( int i = 0; i < sp.size(); ++i )
-		{
-			access.setPosition( sp.get( i ), 0 );
-			access.get().set( i );
-		}
-
-		ImageJFunctions.show( spImage, "spImage" );
+//		final ArrayImg< LongType, LongArray > spImage = ArrayImgs.longs( img.dimension( 0 ), img.dimension( 1 ) );
+//		for ( final LongType s : spImage )
+//			s.set( 255 );
+//		final RandomAccess< LongType > access = FlatViews.flatten( spImage ).randomAccess();
+//		for ( int i = 0; i < sp.size(); ++i )
+//		{
+//			access.setPosition( sp.get( i ), 0 );
+//			access.get().set( i );
+////			System.out.println( sp.get( i ) );
+//		}
+//
+//		ImageJFunctions.show( spImage, "spImage" );
 
 	}
 

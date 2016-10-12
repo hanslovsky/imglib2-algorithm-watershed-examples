@@ -1,9 +1,15 @@
 package de.hanslovsky.examples;
 
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
+import gnu.trove.list.array.TLongArrayList;
 import ij.ImageJ;
 import ij.ImagePlus;
+import ij.ImageStack;
+import ij.plugin.FolderOpener;
+import ij.process.ColorProcessor;
+import ij.process.ImageConverter;
 import net.imglib2.Cursor;
 import net.imglib2.Localizable;
 import net.imglib2.Point;
@@ -12,20 +18,17 @@ import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.algorithm.gauss3.Gauss3;
 import net.imglib2.algorithm.gradient.PartialDerivative;
-import net.imglib2.algorithm.morphology.watershed.Distance;
-import net.imglib2.algorithm.morphology.watershed.PriorityQueueFactory;
-import net.imglib2.algorithm.morphology.watershed.PriorityQueueFastUtil;
 import net.imglib2.algorithm.morphology.watershed.Watershed;
-import net.imglib2.algorithm.neighborhood.DiamondShape;
+import net.imglib2.algorithm.morphology.watershed.Watershed.Compare;
 import net.imglib2.algorithm.neighborhood.Neighborhood;
 import net.imglib2.algorithm.neighborhood.RectangleShape;
 import net.imglib2.algorithm.neighborhood.RectangleShape.NeighborhoodsAccessible;
 import net.imglib2.exception.IncompatibleTypeException;
+import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayCursor;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.img.array.ArrayRandomAccess;
 import net.imglib2.img.basictypeaccess.array.DoubleArray;
 import net.imglib2.img.basictypeaccess.array.LongArray;
 import net.imglib2.img.display.imagej.ImageJFunctions;
@@ -33,12 +36,14 @@ import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.IntegerType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.LongType;
+import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.util.IntervalIndexer;
+import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
 import net.imglib2.view.Views;
 
-public class WatershedsExampleSimple
+public class WatershedsExample3D
 {
 
 	public static double euclidianSquared( final long pos1, final long pos2, final long[] dim )
@@ -57,63 +62,83 @@ public class WatershedsExampleSimple
 		return val * val;
 	}
 
-	public static void main( final String[] args ) throws IncompatibleTypeException
+	public static void main( final String[] args ) throws IncompatibleTypeException, InterruptedException, ExecutionException
 	{
 
 		new ImageJ();
+		final String url = "/data/hanslovskyp/davi_toy_set/substacks/scale=1.0/data";
+		final ImagePlus imp = new FolderOpener().openFolder( url );
+//		new ImageConverter( imp ).convertToGray32();
 
-		final int w = 5;
-		final int h = 4;
-		final long[] markers = new long[ w * h ];
 
-		final ArrayImg< DoubleType, DoubleArray > gradient = ArrayImgs.doubles( w, h );
-		for ( final ArrayCursor< DoubleType > g = gradient.cursor(); g.hasNext(); )
+		imp.show();
+		final Img< UnsignedShortType > source = ImageJFunctions.wrapShort( imp );
+
+		final ArrayImg< DoubleType, DoubleArray >[] gradients = gradientsAndMagnitude( source, 15.5 );
+
+		ImageJFunctions.show( gradients[ 3 ], "grad mag" );
+
+		final long[] markers = new long[ ( int ) source.size() ];
+
+		final ArrayImg< LongType, LongArray > markersWrapped = ArrayImgs.longs( markers, imp.getWidth(), imp.getHeight(), imp.getStackSize() );
+
+//		final DiamondShape shape = new DiamondShape( 1 );
+		final RectangleShape shape = new RectangleShape( 1, false );
+
+		final Compare< DoubleType > comp = ( first, second ) -> first.get() < second.get();
+
+		final int nThreads = Runtime.getRuntime().availableProcessors();
+
+		final int N = 10;
+		final int n = 3;
+		long acc = 0;
+		for ( int i = 0; i < N; ++i )
 		{
-			g.fwd();
-			if ( g.getIntPosition( 0 ) == g.getIntPosition( 1 ) )
-				g.get().set( 255.0 );
+			final long[] markersCl = markers.clone();
+			final ArrayImg< LongType, LongArray > markersWr = ArrayImgs.longs( markersCl, imp.getWidth(), imp.getHeight(), imp.getStackSize() );
+			final long t0 = System.currentTimeMillis();
+			Watershed.findBasinsAndFill( gradients[ 3 ], markersWr, shape, new LongType( -1 ), new LongType( -2 ), comp, nThreads, () -> {} );
+			final long t1 = System.currentTimeMillis();
+			final long diff = t1 - t0;
+			System.out.println( "Runtime: " + diff );
+			if ( i > n )
+				acc += diff;
 		}
 
-		final ArrayImg< LongType, LongArray > markersWrapped = ArrayImgs.longs( markers, w, h );
-		final ArrayRandomAccess< LongType > acc = markersWrapped.randomAccess();
+		if ( N > n )
+			System.out.println( acc * 1.0 / ( N - n - 1 ) );
 
-		acc.setPosition( new int[] { 0, 1 } );
-		acc.get().set( 1 );
-		acc.setPosition( new int[] { 1, 0 } );
-		acc.get().set( 2 );
+		final TLongArrayList sp = Watershed.findBasinsAndFill( gradients[ 3 ], markersWrapped, shape, new LongType( -1 ), new LongType( -2 ), comp, nThreads, () -> {} );
 
-		final DiamondShape shape = new DiamondShape( 1 );
-//		final RectangleShape shape = new RectangleShape( 1, true );
 
-		final Watershed.StoreageFactory< LongType > fac = ( final long size, final LongType t ) -> ArrayImgs.longs( size );
+		ImageJFunctions.show( ArrayImgs.longs( markers, imp.getWidth(), imp.getHeight(), imp.getStackSize() ) );
+		final LongType bg = markersWrapped.firstElement().createVariable();
+		bg.set( -1l );
+		final ArrayImg< LongType, ? > seedsGradient =
+				makeSeedsGradient( ArrayImgs.longs( markers, imp.getWidth(), imp.getHeight(), imp.getStackSize() ), bg );
+		ImageJFunctions.show( seedsGradient, "labels" );
 
-		final double weight = 0.00;
-		final Distance< DoubleType > dist = ( comparison, reference, position, seedPosition, numberOfSteps, i ) -> comparison.get() + weight * numberOfSteps;
-//		final Distance< DoubleType > dist =
-//				( comparison, reference, position, seedPosition, numberOfSteps ) -> comparison.get() + weight * Math.sqrt( euclidianSquared( position, seedPosition, dim ) );
+		final ImagePlus imp2 = new FolderOpener().openFolder( url );
+		new ImageConverter( imp2 ).convertToRGB();
 
-		ImageJFunctions.show( gradient, "grad" );
+		overlay( imp2, seedsGradient, bg );
 
-//		final PriorityQueueFactory fac2 = new HierarchicalPriorityQueueIntHeaps.Factory( 1024 * 4 );
-		final PriorityQueueFactory fac2 = PriorityQueueFastUtil.FACTORY;
+		imp2.show();
 
-		Watershed.flood(
-				gradient,
-				ArrayImgs.longs( markers, w, h ),
-				shape,
-				new LongType( 0l ),
-				new LongType( -1l ),
-				dist,
-				fac,
-				fac2 );
-		ImageJFunctions.show( ArrayImgs.longs( markers, w, h ) );
-//		final LongType bg = markersWrapped.firstElement().createVariable();
-//		bg.set( -1l );
-//		final ArrayImg< LongType, ? > seedsGradient =
-//				makeSeedsGradient( ArrayImgs.longs( markers, w, h ), bg );
-//		ImageJFunctions.show( seedsGradient, "labels" );
-//		overlay( imp, seedsGradient, bg );
+//		for ( int i = 0; i < sp.size(); ++i )
+//			System.out.println( sp.get( i ) );
 
+//		System.out.println( "\n" + sp.size() );
+//
+//		final ArrayImg< LongType, LongArray > spImage = ArrayImgs.longs( img.dimension( 0 ), img.dimension( 1 ) );
+//		final RandomAccess< LongType > access = FlatViews.flatten( spImage ).randomAccess();
+//		for ( int i = 0; i < sp.size(); ++i )
+//		{
+//			access.setPosition( sp.get( i ), 0 );
+//			access.get().set( i );
+//		}
+//
+//		ImageJFunctions.show( spImage, "spImage" );
 
 	}
 
@@ -174,20 +199,40 @@ public class WatershedsExampleSimple
 			final RandomAccessibleInterval< T > img,
 			final double sigma ) throws IncompatibleTypeException
 	{
-		final ArrayImg< DoubleType, DoubleArray > gauss = ArrayImgs.doubles( img.dimension( 0 ), img.dimension( 1 ) );
+		final long[] dim = Intervals.dimensionsAsLongArray( img );
+		final ArrayImg< DoubleType, DoubleArray > gauss = ArrayImgs.doubles( dim );
 		Gauss3.gauss( sigma, Views.extendBorder( img ), gauss );
 		@SuppressWarnings( "unchecked" )
-		final ArrayImg< DoubleType, DoubleArray >[] gradients = new ArrayImg[] {
-				ArrayImgs.doubles( img.dimension( 0 ), img.dimension( 1 ) ),
-				ArrayImgs.doubles( img.dimension( 0 ), img.dimension( 1 ) ),
-				ArrayImgs.doubles( img.dimension( 0 ), img.dimension( 1 ) )
-		};
+		final ArrayImg< DoubleType, DoubleArray >[] gradients = new ArrayImg[ img.numDimensions() + 1 ];
+		for ( int i = 0; i < gradients.length; ++i )
+			gradients[ i ] = ArrayImgs.doubles( dim );
 
-		PartialDerivative.gradientCentralDifference( Views.extendBorder( gauss ), gradients[ 0 ], 0 );
-		PartialDerivative.gradientCentralDifference( Views.extendBorder( gauss ), gradients[ 1 ], 1 );
+//				{
+//
+//				ArrayImgs.doubles( img.dimension( 0 ), img.dimension( 1 ) ),
+//				ArrayImgs.doubles( img.dimension( 0 ), img.dimension( 1 ) ),
+//				ArrayImgs.doubles( img.dimension( 0 ), img.dimension( 1 ) )
+//		};
 
-		for ( ArrayCursor< DoubleType > g1 = gradients[ 0 ].cursor(), g2 = gradients[ 1 ].cursor(), g = gradients[ 2 ].cursor(); g.hasNext(); )
-			g.next().setReal( Math.sqrt( Math.pow( g1.next().get(), 2 ) + Math.pow( g2.next().get(), 2 ) ) );
+		for ( int i = 0; i < gradients.length - 1; ++i )
+			PartialDerivative.gradientCentralDifference( Views.extendBorder( gauss ), gradients[ i ], i );
+
+		@SuppressWarnings( "unchecked" )
+		final ArrayCursor< DoubleType >[] cursors = new ArrayCursor[ gradients.length - 1 ];
+		for ( int i = 0; i < cursors.length; ++i )
+			cursors[i] = gradients[i].cursor();
+
+		final DoubleType d = new DoubleType();
+		for ( final ArrayCursor< DoubleType > g = gradients[ gradients.length - 1 ].cursor(); g.hasNext(); )
+		{
+			double val = 0.0;
+			for ( int i = 0; i < cursors.length; ++i )
+			{
+				final double v = cursors[ i ].next().get();
+				val += v * v;
+			}
+			g.next().set( Math.sqrt( val ) );
+		}
 
 		return gradients;
 	}
@@ -219,7 +264,7 @@ public class WatershedsExampleSimple
 
 		final T dummy = backGround.createVariable();
 		final NeighborhoodsAccessible< T > nh = new RectangleShape( 1, true ).neighborhoodsRandomAccessible( Views.extendValue( img, backGround ) );
-		final ArrayImg< T, ? > result = fac.create( new long[] { img.dimension( 0 ), img.dimension( 1 ) }, backGround );
+		final ArrayImg< T, ? > result = fac.create( Intervals.dimensionsAsLongArray( img ), backGround );
 		final ArrayCursor< T > ic = result.cursor();
 		for ( final Cursor< Neighborhood< T > > n = Views.interval( nh, img ).cursor(); n.hasNext(); )
 		{
@@ -262,11 +307,15 @@ public class WatershedsExampleSimple
 
 	public static < T extends IntegerType< T > > void overlay( final ImagePlus imp, final RandomAccessibleInterval< T > watersheds, final T backGround )
 	{
-		final int[] px = ( int[] ) imp.getProcessor().getPixels();
-		final Cursor< T > w = Views.iterable( watersheds ).cursor();
-		for ( int i = 0; i < px.length; ++i )
+
+		final ImageStack stack = imp.getStack();
+
+		for ( final Cursor< T > w = Views.iterable( watersheds ).cursor(); w.hasNext(); )
 			if ( !w.next().valueEquals( backGround ) )
-				px[ i ] = 255 << 16;
+			{
+				final ColorProcessor ip = ( ColorProcessor ) stack.getProcessor( w.getIntPosition( 2 ) + 1 );
+				ip.set( w.getIntPosition( 0 ), w.getIntPosition( 1 ), 255 << 16 );
+			}
 	}
 
 }

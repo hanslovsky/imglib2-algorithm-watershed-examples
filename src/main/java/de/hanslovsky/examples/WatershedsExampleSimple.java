@@ -88,7 +88,7 @@ public class WatershedsExampleSimple
 		final Watershed.StoreageFactory< LongType > fac = ( final long size, final LongType t ) -> ArrayImgs.longs( size );
 
 		final double weight = 0.00;
-		final Distance< DoubleType > dist = ( comparison, reference, position, seedPosition, numberOfSteps, i ) -> comparison.get() + weight * numberOfSteps;
+		final Distance< DoubleType > dist = ( comparison, reference, position, seedPosition, numberOfSteps ) -> comparison.get() + weight * numberOfSteps;
 //		final Distance< DoubleType > dist =
 //				( comparison, reference, position, seedPosition, numberOfSteps ) -> comparison.get() + weight * Math.sqrt( euclidianSquared( position, seedPosition, dim ) );
 

@@ -98,7 +98,7 @@ public class WatershedsExample2DGeneric
 
 		final long[] dim = Intervals.dimensionsAsLongArray( markersWrapped );
 		final double weight = 0.0;
-		final Distance< DoubleType > dist = ( comparison, reference, position, seedPosition, numberOfSteps, i ) -> comparison.get() + weight * numberOfSteps;
+		final Distance< DoubleType > dist = ( comparison, reference, position, seedPosition, numberOfSteps ) -> comparison.get() + weight * numberOfSteps;
 //		final Distance< DoubleType > dist =
 //				( comparison, reference, position, seedPosition, numberOfSteps ) -> comparison.get() + weight * Math.sqrt( euclidianSquared( position, seedPosition, dim ) );
 

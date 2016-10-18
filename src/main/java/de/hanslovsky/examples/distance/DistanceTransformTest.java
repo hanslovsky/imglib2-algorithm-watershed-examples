@@ -1,7 +1,11 @@
 package de.hanslovsky.examples.distance;
 
+import java.util.concurrent.ExecutionException;
+
 import ij.ImageJ;
 import ij.ImagePlus;
+import net.imglib2.algorithm.morphology.distance.DistanceTransform;
+import net.imglib2.algorithm.morphology.distance.DistanceTransform.DISTANCE_TYPE;
 import net.imglib2.converter.read.ConvertedRandomAccessibleInterval;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgs;
@@ -13,10 +17,15 @@ import net.imglib2.view.Views;
 public class DistanceTransformTest
 {
 
-	public static void main( final String[] args )
+	public static void main( final String[] args ) throws InterruptedException, ExecutionException
 	{
+
+		final String homeDir = System.getProperty( "user.home" );
+
 		new ImageJ();
-		final String url = "/home/phil/input.png";
+		final String url = homeDir + "/Downloads/dt/input.png";
+		System.out.println( url + " " + homeDir );
+//		final String url = "/home/hanslovskyp/Downloads/dt/input-100x100+50+50.png";
 		final ImagePlus imp = new ImagePlus( url );
 		imp.show();
 		final ArrayImg< FloatType, FloatArray > img = ArrayImgs.floats( ( float[] ) imp.getProcessor().convertToFloatProcessor().getPixels(), imp.getWidth(), imp.getHeight() );
@@ -29,7 +38,16 @@ public class DistanceTransformTest
 
 		ImageJFunctions.show( conv, "conv" );
 
-		DistanceTransform.transformSquared( conv, target );
+		final int nThreads = 1;
+
+		DistanceTransform.transform( conv, target, DISTANCE_TYPE.L1, nThreads, 1.0e5 );
+//		DistanceTransform.transform( conv, target, DISTANCE_TYPE.EUCLIDIAN, nThreads, 5.0e5 );
+//		DistanceTransform.transform( conv, target, new L1DistanceIsotropic( 1e8f / 10 ) );
+//		DistanceTransform.transform( conv, target, new L1DistanceAnisotropic( 1.0, 0.2 ) );
+//		DistanceTransform.transform( conv, target, new EuclidianDistanceAnisotropic( 0.1, 3.0 ) );
+//		DistanceTransform.transformL1( conv, target, 1.0, 0.2 );
+
+		ImageJFunctions.show( target, "dt" );
 
 		float min = Float.MAX_VALUE, max = -Float.MAX_VALUE;
 
@@ -48,7 +66,8 @@ public class DistanceTransformTest
 			t.set( ( ( float ) Math.sqrt( s.get() ) - fMin ) / range * 255.0f );
 		}, new FloatType() ) );
 
-		new ImagePlus( "/home/phil/output.pgm" ).show();
+
+		new ImagePlus( homeDir + "/Downloads/dt/output.pgm" ).show();
 
 	}
 

@@ -1,5 +1,7 @@
 package de.hanslovsky.examples;
 
+import org.apache.commons.lang.StringUtils;
+
 import bdv.util.ConstantRandomAccessible;
 import net.imglib2.Cursor;
 import net.imglib2.Point;
@@ -19,5 +21,7 @@ public class Dummy
 			n.fwd();
 			System.out.println( new Point( n) );
 		}
+
+		System.out.println( StringUtils.leftPad( Long.toBinaryString( 1l << 63 ), 64, "0" ) + " " + ( ( 1l << 63 ) - 1 ) );
 	}
 }

@@ -12,6 +12,7 @@ import java.util.Random;
 
 import bdv.img.h5.H5Utils;
 import bdv.util.BdvFunctions;
+import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
 import bdv.viewer.ViewerPanel;
 import gnu.trove.map.hash.TLongIntHashMap;
@@ -39,7 +40,8 @@ public class ShowZWPred
 	public static void main( final String[] args )
 	{
 		final String probPath = Util.HOME_DIR + "/Dropbox/misc/excerpt.h5";
-		final String predPath = Util.HOME_DIR + "/home/phil/Dropbox/misc/excerpt-pred.h5";
+		final String predPath = Util.HOME_DIR + "/Dropbox/misc/excerpt-pred.h5";
+//		final String predPath = Util.HOME_DIR + "/local/tmp/zw.h5";
 
 		final long[] dims = new long[] { 300, 300, 100, 3 };
 		final long[] labelsDims = new long[] { 300, 300, 100 };
@@ -60,13 +62,9 @@ public class ShowZWPred
 		bdv.getBdvHandle().getViewerPanel().getDisplay().addOverlayRenderer( vdl );
 		bdv.getBdvHandle().getViewerPanel().getDisplay().addMouseMotionListener( vdl );
 
-		final CellImg< LongType, ?, ? > pred0 = H5Utils.loadUnsignedLong( predPath, "pred0", new int[] { 300, 300, 100 } );
+		final CellImg< LongType, ?, ? > pred0 = H5Utils.loadUnsignedLong( predPath, "pred1", new int[] { 300, 300, 100 } );
 
-		BdvFunctions.show( pred0, "pred0" );
-
-		final CellImg< LongType, ?, ? > pred1 = H5Utils.loadUnsignedLong( predPath, "pred1", new int[] { 300, 300, 100 } );
-
-		BdvFunctions.show( pred1, "pred1" );
+//		BdvFunctions.show( pred0, "pred0" );
 
 		final Random rng = new Random( 100 );
 		final TLongIntHashMap colors = new TLongIntHashMap();
@@ -86,7 +84,7 @@ public class ShowZWPred
 			}
 		}, new ARGBType() );
 
-		BdvFunctions.show( colored, "colored labels" );
+		BdvFunctions.show( colored, "colored labels", BdvOptions.options().addTo( bdv ) );
 
 	}
 

@@ -1,5 +1,7 @@
 package de.hanslovsky.examples;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 
@@ -12,8 +14,13 @@ import gnu.trove.list.array.TLongArrayList;
 import ij.ImageJ;
 import net.imglib2.Cursor;
 import net.imglib2.Dimensions;
+import net.imglib2.Point;
+import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.algorithm.morphology.watershed.AffinityWatershed2;
+import net.imglib2.algorithm.morphology.watershed.AffinityWatershed2.WeightedEdge;
 import net.imglib2.algorithm.morphology.watershed.affinity.AffinityView;
+import net.imglib2.converter.Converters;
+import net.imglib2.img.array.ArrayCursor;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.array.DoubleArray;
@@ -24,6 +31,7 @@ import net.imglib2.type.numeric.integer.LongType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.ValuePair;
 import net.imglib2.view.Views;
 import net.imglib2.view.composite.CompositeView;
 import net.imglib2.view.composite.RealComposite;
@@ -120,6 +128,8 @@ public class AffinityViewWatershed3D
 		access.get().get( 0 ).set( Double.NaN );
 		access.get().get( 1 ).set( Double.NaN );
 
+
+
 		final ArrayImg< LongType, LongArray > labels = ArrayImgs.longs( shape );
 
 		final MultiGraph initialGraph = createGraph( 20, "Disaffinities", labels );
@@ -152,44 +162,91 @@ public class AffinityViewWatershed3D
 						Views.extendValue( Views.collapseReal( disaffinities ), extension ),
 						( size ) -> Views.collapseReal( ArrayImgs.doubles( 1, size ) ).randomAccess().get() );
 
-		final TLongArrayList roots = AffinityWatershed2.letItRain(
+		for ( final Cursor< RealComposite< DoubleType > > c = Views.flatIterable( Views.interval( input, labels ) ).cursor(); c.hasNext(); )
+		{
+			c.fwd();
+			System.out.println( new Point( c ) + " " + c.get().get( 0 ) + " " + c.get().get( 1 ) + " " + c.get().get( 2 ) + " " + c.get().get( 3 ) );
+		}
+
+		final ValuePair< TLongArrayList, long[] > rootsAndCounts = AffinityWatershed2.letItRain(
 				input,
-				Views.collapseReal( edges ),
 				labels,
 				( f, s ) -> f.getRealDouble() < s.getRealDouble(),
-				new LongType( -1 ),
-				new LongType( -2 ),
 				new DoubleType( Double.MAX_VALUE ),
 				Executors.newFixedThreadPool( 1 ),
 				1 );
 
-		for ( final TLongIterator it = roots.iterator(); it.hasNext(); )
-			System.out.println( "root: " + it.next() );
+		new ImageJ();
+		ImageJFunctions.show( Converters.convert( ( RandomAccessibleInterval< LongType > ) labels, ( s, t ) -> {
+			System.out.println( Long.toBinaryString( s.get() ) );
+			t.set( s.get() & ~( 1l << 63 | 1l << 62 ) );
+		}, new LongType() ) );
+//		ImageJFunctions.show( labels );
+
+		final long highBit = 1l << 63;
 
 		final MultiGraph g = createGraph( 20, "Parents", labels );
 		{
-			final Cursor< RealComposite< BitType > > c = Views.flatIterable( Views.collapseReal( edges ) ).cursor();
+//			final Cursor< RealComposite< BitType > > c = Views.flatIterable( Views.collapseReal( edges ) ).cursor();
+			System.out.println( labels.cursor().next() );
+			final ArrayCursor< LongType > c = labels.cursor();
 			for ( int i = 0; i < 20; ++i )
 			{
-				final RealComposite< BitType > es = c.next();
-				if ( es.get( 0 ).get() )
-					g.addEdge( i + "-" + ( i + 1 ), "" + i, "" + ( i + 1 ), true );
-
-				if ( es.get( 1 ).get() )
-					g.addEdge( i + "-" + ( i + labels.dimension( 0 ) ), "" + i, "" + ( i + labels.dimension( 0 ) ), true );
-
-				if ( es.get( 2 ).get() )
-					g.addEdge( i + "-" + ( i - 1 ), "" + i, "" + ( i - 1 ), true );
-
-				if ( es.get( 3 ).get() )
-					g.addEdge( i + "-" + ( i - labels.dimension( 0 ) ), "" + i, "" + ( i - labels.dimension( 0 ) ), true );
+				final LongType l = c.next();
+				System.out.println( "GUG " + i + " " + Long.toBinaryString( l.get() ) );
+//				g.addEdge( i + "-" + l, "" + i, l + "", true );
 			}
+//			{
+////				final RealComposite< BitType > es = c.next();
+////				if ( es.get( 2 ).get() )
+////					g.addEdge( i + "-" + ( i + 1 ), "" + i, "" + ( i + 1 ), true );
+////
+////				if ( es.get( 3 ).get() )
+////					g.addEdge( i + "-" + ( i + labels.dimension( 0 ) ), "" + i, "" + ( i + labels.dimension( 0 ) ), true );
+////
+////				if ( es.get( 1 ).get() )
+////					g.addEdge( i + "-" + ( i - 1 ), "" + i, "" + ( i - 1 ), true );
+////
+////				if ( es.get( 0 ).get() )
+////					g.addEdge( i + "-" + ( i - labels.dimension( 0 ) ), "" + i, "" + ( i - labels.dimension( 0 ) ), true );
+//				final long l = c.next().get();
+//				if ( ( l & 1l << 2 ) != 0 )
+//					g.addEdge( i + "-" + ( i + 1 ), "" + i, "" + ( i + 1 ), true );
+//
+//				if ( ( l & 1l << 3 ) != 0 )
+//					g.addEdge( i + "-" + ( i + labels.dimension( 0 ) ), "" + i, "" + ( i + labels.dimension( 0 ) ), true );
+//
+//				if ( ( l & 1l << 1 ) != 0 )
+//					g.addEdge( i + "-" + ( i - 1 ), "" + i, "" + ( i - 1 ), true );
+//
+//				if ( ( l & 1l << 0 ) != 0 )
+//					g.addEdge( i + "-" + ( i - labels.dimension( 0 ) ), "" + i, "" + ( i - labels.dimension( 0 ) ), true );
+//
+//			}
 		}
 
 		g.display( false );
 
-		new ImageJ();
-		ImageJFunctions.show( labels );
+		final TLongArrayList roots = rootsAndCounts.getA();
+		System.out.println( Arrays.toString( rootsAndCounts.getB() ) );
+
+		for ( final TLongIterator it = roots.iterator(); it.hasNext(); )
+			System.out.println( "root: " + it.next() );
+
+
+		final long[] steps = AffinityWatershed2.generateSteps( AffinityWatershed2.generateStride( labels ) );
+
+		final ArrayList< WeightedEdge< LongType, DoubleType > > rg =
+				AffinityWatershed2.generateRegionGraph(
+						input,
+						labels,
+						steps,
+						( f, s ) -> f.getRealDouble() < s.getRealDouble(),
+						new DoubleType( Double.MAX_VALUE ) );
+
+		for ( final WeightedEdge< LongType, DoubleType > w : rg )
+			System.out.println(w);
+
 //		final short val = ( short ) 255;
 //		ImageJFunctions.show( Converters.convert( ( RandomAccessibleInterval< LongType > ) labels, ( s, t ) -> {
 //			t.set( s.get() < 0 ? val : 0 );

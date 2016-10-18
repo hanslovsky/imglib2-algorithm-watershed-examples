@@ -1,6 +1,7 @@
 #!/urs/bin/env python
 
 import h5py
+import numpy as np
 import os
 import sys
 import zwatershed as zw
@@ -18,7 +19,9 @@ if __name__ == "__main__":
 	with h5py.File(i, 'r') as f:
 		data = f['main'].value
 
-	pred = zw.zwatershed(data, [0.0])
+	print (np.min(data), np.max(data))
+
+	pred = zw.zwatershed(data, [-1])
 
 	if o:
 		with h5py.File(o, 'w') as f:

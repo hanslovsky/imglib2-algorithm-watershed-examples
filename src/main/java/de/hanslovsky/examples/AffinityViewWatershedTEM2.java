@@ -18,23 +18,16 @@ import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
 import bdv.viewer.ViewerPanel;
-import gnu.trove.iterator.TLongIterator;
 import gnu.trove.list.array.TLongArrayList;
-import gnu.trove.map.hash.TLongLongHashMap;
-import net.imglib2.Point;
-import net.imglib2.RandomAccessibleInterval;
+import gnu.trove.map.hash.TLongIntHashMap;
 import net.imglib2.RealRandomAccess;
-import net.imglib2.algorithm.gradient.PartialDerivative;
 import net.imglib2.algorithm.morphology.watershed.AffinityWatershed2;
 import net.imglib2.algorithm.morphology.watershed.AffinityWatershed2.CompareBetter;
 import net.imglib2.algorithm.morphology.watershed.AffinityWatershed2.WeightedEdge;
 import net.imglib2.algorithm.morphology.watershed.DisjointSets;
 import net.imglib2.algorithm.morphology.watershed.affinity.AffinityView;
 import net.imglib2.algorithm.morphology.watershed.affinity.CompositeFactory;
-import net.imglib2.converter.Converters;
-import net.imglib2.converter.RealDoubleConverter;
 import net.imglib2.converter.read.ConvertedRandomAccessibleInterval;
-import net.imglib2.img.array.ArrayCursor;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.array.DoubleArray;
@@ -47,7 +40,6 @@ import net.imglib2.type.numeric.integer.LongType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.ui.OverlayRenderer;
-import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
@@ -122,142 +114,110 @@ public class AffinityViewWatershedTEM2
 				comp,
 				new DoubleType( -Double.MAX_VALUE ),
 				Executors.newFixedThreadPool( 1 ),
-				1 );
+				1,
+				() -> {} );
 
 		final long[] strides = AffinityWatershed2.generateStride( labels );
 		final long[] steps = AffinityWatershed2.generateSteps( strides );
 
-
-
-		final TLongArrayList roots = rootsAndCounts.getA();
 		final long[] counts = rootsAndCounts.getB();
-		final TLongLongHashMap indexToLabel = new TLongLongHashMap();
-		for ( int i = 0; i < counts.length; ++i )
-			indexToLabel.put( roots.get( i ), i );
 
-		final RandomAccessibleInterval< LongType > labelsNorm = Converters.convert( ( RandomAccessibleInterval< LongType > ) labels, ( s, t ) -> {
-			t.set( indexToLabel.get( s.get() ) );
-		}, new LongType() );
+		final long highBit = 1l << 63;
+		final long secondHighBit = 1l << 62;
 
-		final ArrayList< WeightedEdge< LongType, DoubleType > > rg = AffinityWatershed2.generateRegionGraph(
+		final ArrayList< WeightedEdge > rg = AffinityWatershed2.generateRegionGraph(
 				affsView,
-				labelsNorm,
+				labels,
 				steps,
 				comp,
-				new DoubleType( -Double.MAX_VALUE ) );
+				new DoubleType( -Double.MAX_VALUE ),
+				highBit,
+				secondHighBit,
+				counts.length );
 
-		final long sizeThreshold = 0;
-
-
-		final DisjointSets dj = new DisjointSets( roots.size() );
-
-
+		final long sizeThreshold = 50000;
 
 
+		final DisjointSets dj = new DisjointSets( counts.length );
 
-		for ( final WeightedEdge< LongType, DoubleType > edge : rg )
+
+
+
+
+		System.out.println( "Merging graph!" );
+		for ( final WeightedEdge edge : rg )
 		{
 
-			final double val = edge.getV().getRealDouble();
+			final double val = edge.getV();
 
 			final double valSquared = val * val * sizeThreshold;
-			final int id1 = dj.findRoot( edge.getFirst().getInteger() );
-			final int id2 = dj.findRoot( edge.getSecond().getInteger() );
-			if ( val > 0.5 )
 
-				if ( id1 != id2 )
-					if ( Math.min( counts[id1], counts[id2] ) < valSquared ) {
-						counts[id1] += counts[id2];
-						counts[id2] = 2;
-						final int newId = dj.join( id1, id2 );
-						final long tmpCount = counts[newId];
-						counts[newId] = counts[id1];
-						counts[id1] = tmpCount;
-					}
+			if ( val < 1e-4 )
+				break;
+
+			final int id1 = dj.findRoot( ( int ) edge.getFirst() );
+			final int id2 = dj.findRoot( ( int ) edge.getSecond() );
+//			if ( val > 0.5 )
+
+			if ( id1 != id2 && id1 > 0 && id2 > 0 )
+				if ( Math.min( counts[id1], counts[id2] ) < valSquared ) {
+					final int newId = dj.join( id1, id2 );
+					final int otherId = newId == id1 ? id2 : id1;
+					counts[ newId ] = counts[ newId ] + counts[ otherId ];
+					counts[ otherId ] = 0;
+//					System.out.println( id1 + " " + id2 + " " + newId + " : " + counts[ id1 ] + " " + counts[ id2 ] + " " + counts[ newId ] );
+//					break;
+
+//					counts[ id1 ] += counts[ id2 ];
+//					counts[ id2 ] = 0;
+//					final long tmpCount = counts[ id1 ];
+//					counts[ id1 ] = counts[ newId ];
+//					counts[ newId ] = tmpCount;
+
+//					if ( id2 < id1 )
+//						System.out.println( id1 + " " + id2 + " " + newId + " " + counts[id1] + " " + counts[id2] + " " + counts[newId] + " " + edge);
+//
+//					if ( id1 != newId )
+//					{
+//						System.out.println( "MIZZZGE!" );
+//						break;
+//					}
+				}
 
 		}
 
 //		final TLongArrayList roots = AffinityWatershed.watershed( affsView, labels, compare, new DoubleType( Double.MAX_VALUE ), new LongType( -1 ) );
 
-		System.out.println( "Got roots! " + dj.setCount() + " " + roots.size() );
+		System.out.println( "Got roots! " + dj.setCount() + " " + counts.length );
 
 //		BdvFunctions.show( labels, "labels" );
 
-		@SuppressWarnings( "unchecked" )
-		final ArrayImg< DoubleType, DoubleArray >[] gradients = new ArrayImg[] {
-				ArrayImgs.doubles( labelsDims ),
-				ArrayImgs.doubles( labelsDims ),
-				ArrayImgs.doubles( labelsDims ),
-				ArrayImgs.doubles( labelsDims )
-		};
-
-		for ( int d = 0; d < gradients.length - 1; ++d )
-			PartialDerivative.gradientCentralDifference( Views.extendBorder( new ConvertedRandomAccessibleInterval<>( labels, new RealDoubleConverter<>(), new DoubleType() ) ), gradients[ d ], d );
-
-		@SuppressWarnings( { "unchecked" } )
-		final ArrayCursor< DoubleType >[] cursors = new ArrayCursor[] {
-				gradients[ 0 ].cursor(),
-				gradients[ 1 ].cursor(),
-				gradients[ 2 ].cursor(),
-				gradients[ 3 ].cursor(),
-		};
-
-		while ( cursors[ 0 ].hasNext() )
-		{
-			double val = 0.0;
-			for ( int d = 0; d < gradients.length - 1; ++d )
-			{
-				final double v = cursors[ d ].next().get();
-				val += v;
-			}
-			cursors[ gradients.length - 1 ].next().set( val );
-		}
-
-		final ConvertedRandomAccessibleInterval< DoubleType, LongType > view =
-				new ConvertedRandomAccessibleInterval<>( gradients[ gradients.length - 1 ], ( s, t ) -> {
-					t.set( s.get() > 0.0 ? 1 << 16 : 0 );
-				}, new LongType() );
-
-		final TLongLongHashMap hs = new TLongLongHashMap();
-		final int colors[] = new int[ roots.size() ];
+		final TLongIntHashMap colors = new TLongIntHashMap();
 		final Random rng = new Random( 100 );
 		{
-			int i = 0;
-			for ( final TLongIterator r = roots.iterator(); r.hasNext(); ++i )
+			colors.put( 0, 0 );
+			for ( int i = 1; i < counts.length; ++i )
 			{
-				hs.put( r.next(), i );
-				colors[ i ] = rng.nextInt() << 8;
+				final long root = dj.findRoot( i );
+				if ( !colors.contains( root ) )
+					colors.put( root, rng.nextInt() );
 			}
 		}
 
-
-//		BdvFunctions.show( view, "labels grad" );
-		final ConvertedRandomAccessibleInterval< LongType, LongType > oneBased = new ConvertedRandomAccessibleInterval<>( labels, ( s, t ) -> {
-			t.set( hs.get( s.get() ) );
-		}, new LongType() );
-		BdvFunctions.show( oneBased, "labels" );
 
 		final ConvertedRandomAccessibleInterval< LongType, ARGBType > colored = new ConvertedRandomAccessibleInterval<>(
 				labels, ( s, t ) -> {
-					t.set( colors[ dj.findRoot( ( int ) indexToLabel.get( s.get() ) ) ] );
+					t.set( colors.get( dj.findRoot( ( int ) s.getIntegerLong() ) ) );
 				}, new ARGBType() );
 
 
-
 		final BdvStackSource< ARGBType > bdv = BdvFunctions.show( new ConvertedRandomAccessibleInterval<>( Views.collapseReal( affs ), ( s, t ) -> {
-			t.set( ARGBType.rgba( 255 * s.get( 0 ).get(), 255 * s.get( 1 ).get(), 255 * s.get( 2 ).get(), 1.0 ) );
+			t.set( ARGBType.rgba( 255 * tf( s.get( 0 ).get() ), 255 * tf( s.get( 1 ).get() ), 255 * tf( s.get( 2 ).get() ), 255.0 ) );
 		}, new ARGBType() ), "affs" );
 
-		final ArrayImg< DoubleType, DoubleArray > rootImg = ArrayImgs.doubles( labelsDims );
-
-		for ( final TLongIterator r = roots.iterator(); r.hasNext(); ) {
-			final ArrayCursor< DoubleType > c = rootImg.cursor();
-			c.jumpFwd( r.next() );
-			c.next().set( 1 << 16 );
-		}
-
 		BdvFunctions.show( colored, "colored labels", BdvOptions.options().addTo( bdv ) );
-		BdvFunctions.show( rootImg, "roots", BdvOptions.options().addTo( bdv ) );
+
+		System.out.println( "cnt: " + dj.setCount() );
 
 		final RealRandomAccess< RealComposite< DoubleType > > rra = Views.interpolate( Views.extendBorder( Views.collapseReal( affs ) ), new NearestNeighborInterpolatorFactory<>() ).realRandomAccess();
 
@@ -265,21 +225,11 @@ public class AffinityViewWatershedTEM2
 		bdv.getBdvHandle().getViewerPanel().getDisplay().addOverlayRenderer( vdl );
 		bdv.getBdvHandle().getViewerPanel().getDisplay().addMouseMotionListener( vdl );
 
-		for ( int i = 1, k = 0; i < roots.size(); ++i, ++k )
-		{
-			final long r1 = roots.get( i ), r2 = roots.get( k );
-			if ( Math.abs( r1 - r2 ) == 1 )
-			{
-				final Point p1 = new Point( 3 ), p2 = new Point( 3 );
-				IntervalIndexer.indexToPosition( r1, labels, p1 );
-				IntervalIndexer.indexToPosition( r2, labels, p2 );
-				System.out.println( p1 + " " + p2 );
-				break;
-			}
-		}
+	}
 
-//		AffinityWatershed.watershed( affView, labels, compare, new DoubleType( Double.MAX_VALUE ) );
-
+	public static double tf( final double e )
+	{
+		return 1 - e;
 	}
 
 	public static < T extends RealType< T > > RealComposite< T > getProbs( final int x, final int y, final RealRandomAccess< RealComposite< T > > access, final ViewerPanel viewer )

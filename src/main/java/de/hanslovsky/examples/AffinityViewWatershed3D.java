@@ -5,11 +5,9 @@ import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 
-import org.graphstream.graph.Edge;
 import org.graphstream.graph.Node;
 import org.graphstream.graph.implementations.MultiGraph;
 
-import gnu.trove.iterator.TLongIterator;
 import gnu.trove.list.array.TLongArrayList;
 import ij.ImageJ;
 import net.imglib2.Cursor;
@@ -31,6 +29,7 @@ import net.imglib2.type.numeric.integer.LongType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
 import net.imglib2.view.Views;
 import net.imglib2.view.composite.CompositeView;
@@ -132,28 +131,28 @@ public class AffinityViewWatershed3D
 
 		final ArrayImg< LongType, LongArray > labels = ArrayImgs.longs( shape );
 
-		final MultiGraph initialGraph = createGraph( 20, "Disaffinities", labels );
-
-		{
-			final Cursor< RealComposite< DoubleType > > c = Views.flatIterable( Views.collapseReal( disaffinities ) ).cursor();
-			for ( int i = 0; i < 20; ++i )
-			{
-				final RealComposite< DoubleType > e = c.next();
-				if ( !Double.isNaN( e.get( 0 ).get() ) )
-				{
-					final Edge edge = initialGraph.addEdge( "" + i + "-" + ( i + 1 ), "" + i, "" + ( i + 1 ), false );
-					edge.addAttribute( "ui.label", e.get( 0 ).get() );
-				}
-
-				if ( !Double.isNaN( e.get( 1 ).get() ) )
-				{
-					final Edge edge = initialGraph.addEdge( "" + i + "-" + ( i + labels.dimension( 0 ) ), "" + i, "" + ( i + labels.dimension( 0 ) ), false );
-					edge.addAttribute( "ui.label", e.get( 1 ).get() );
-				}
-			}
-		}
-
-		initialGraph.display( false );
+//		final MultiGraph initialGraph = createGraph( 20, "Disaffinities", labels );
+//
+//		{
+//			final Cursor< RealComposite< DoubleType > > c = Views.flatIterable( Views.collapseReal( disaffinities ) ).cursor();
+//			for ( int i = 0; i < 20; ++i )
+//			{
+//				final RealComposite< DoubleType > e = c.next();
+//				if ( !Double.isNaN( e.get( 0 ).get() ) )
+//				{
+//					final Edge edge = initialGraph.addEdge( "" + i + "-" + ( i + 1 ), "" + i, "" + ( i + 1 ), false );
+//					edge.addAttribute( "ui.label", e.get( 0 ).get() );
+//				}
+//
+//				if ( !Double.isNaN( e.get( 1 ).get() ) )
+//				{
+//					final Edge edge = initialGraph.addEdge( "" + i + "-" + ( i + labels.dimension( 0 ) ), "" + i, "" + ( i + labels.dimension( 0 ) ), false );
+//					edge.addAttribute( "ui.label", e.get( 1 ).get() );
+//				}
+//			}
+//		}
+//
+//		initialGraph.display( false );
 		final ArrayImg< BitType, LongArray > edges = ArrayImgs.bits( shapeWithEdges );
 
 		final RealComposite< DoubleType > extension = Views.collapseReal( ArrayImgs.doubles( new double[] { Double.NaN, Double.NaN }, 1, 2 ) ).randomAccess().get();
@@ -168,83 +167,81 @@ public class AffinityViewWatershed3D
 			System.out.println( new Point( c ) + " " + c.get().get( 0 ) + " " + c.get().get( 1 ) + " " + c.get().get( 2 ) + " " + c.get().get( 3 ) );
 		}
 
+		new ImageJ();
+
+		final Runnable visitor = new Runnable()
+		{
+
+			final String[] names = new String[] { "parents", "corners", "no plateaus" };
+
+			int index = 0;
+
+			final ArrayImg< LongType, LongArray > img = ArrayImgs.longs( shape );
+
+			@Override
+			public void run()
+			{
+				for ( final Pair< LongType, LongType > p : Views.interval( Views.pair( labels, img ), img ) )
+					p.getB().set( p.getA() );
+				ImageJFunctions.show( img, names[ index ] );
+				final MultiGraph g = createGraph( shape[ 0 ] * shape[ 1 ], names[ index ], img );
+				final ArrayCursor< LongType > c = labels.cursor();
+				for ( int i = 0; c.hasNext(); ++i )
+				{
+					final long l = c.next().get();
+					if ( ( l & 1l << 2 ) != 0 )
+						g.addEdge( i + "-" + ( i + 1 ), "" + i, "" + ( i + 1 ), true );
+					if ( ( l & 1l << 3 ) != 0 )
+						g.addEdge( i + "-" + ( i + labels.dimension( 0 ) ), "" + i, "" + ( i + labels.dimension( 0 ) ), true );
+
+					if ( ( l & 1l << 1 ) != 0 )
+						g.addEdge( i + "-" + ( i - 1 ), "" + i, "" + ( i - 1 ), true );
+
+					if ( ( l & 1l << 0 ) != 0 )
+						g.addEdge( i + "-" + ( i - labels.dimension( 0 ) ), "" + i, "" + ( i - labels.dimension( 0 ) ), true );
+				}
+				g.display( false );
+				++index;
+			}
+		};
+
 		final ValuePair< TLongArrayList, long[] > rootsAndCounts = AffinityWatershed2.letItRain(
 				input,
 				labels,
 				( f, s ) -> f.getRealDouble() < s.getRealDouble(),
 				new DoubleType( Double.MAX_VALUE ),
 				Executors.newFixedThreadPool( 1 ),
-				1 );
+				1,
+				visitor );
 
-		new ImageJ();
+
 		ImageJFunctions.show( Converters.convert( ( RandomAccessibleInterval< LongType > ) labels, ( s, t ) -> {
 			System.out.println( Long.toBinaryString( s.get() ) );
 			t.set( s.get() & ~( 1l << 63 | 1l << 62 ) );
 		}, new LongType() ) );
 //		ImageJFunctions.show( labels );
 
-		final long highBit = 1l << 63;
-
-		final MultiGraph g = createGraph( 20, "Parents", labels );
-		{
-//			final Cursor< RealComposite< BitType > > c = Views.flatIterable( Views.collapseReal( edges ) ).cursor();
-			System.out.println( labels.cursor().next() );
-			final ArrayCursor< LongType > c = labels.cursor();
-			for ( int i = 0; i < 20; ++i )
-			{
-				final LongType l = c.next();
-				System.out.println( "GUG " + i + " " + Long.toBinaryString( l.get() ) );
-//				g.addEdge( i + "-" + l, "" + i, l + "", true );
-			}
-//			{
-////				final RealComposite< BitType > es = c.next();
-////				if ( es.get( 2 ).get() )
-////					g.addEdge( i + "-" + ( i + 1 ), "" + i, "" + ( i + 1 ), true );
-////
-////				if ( es.get( 3 ).get() )
-////					g.addEdge( i + "-" + ( i + labels.dimension( 0 ) ), "" + i, "" + ( i + labels.dimension( 0 ) ), true );
-////
-////				if ( es.get( 1 ).get() )
-////					g.addEdge( i + "-" + ( i - 1 ), "" + i, "" + ( i - 1 ), true );
-////
-////				if ( es.get( 0 ).get() )
-////					g.addEdge( i + "-" + ( i - labels.dimension( 0 ) ), "" + i, "" + ( i - labels.dimension( 0 ) ), true );
-//				final long l = c.next().get();
-//				if ( ( l & 1l << 2 ) != 0 )
-//					g.addEdge( i + "-" + ( i + 1 ), "" + i, "" + ( i + 1 ), true );
-//
-//				if ( ( l & 1l << 3 ) != 0 )
-//					g.addEdge( i + "-" + ( i + labels.dimension( 0 ) ), "" + i, "" + ( i + labels.dimension( 0 ) ), true );
-//
-//				if ( ( l & 1l << 1 ) != 0 )
-//					g.addEdge( i + "-" + ( i - 1 ), "" + i, "" + ( i - 1 ), true );
-//
-//				if ( ( l & 1l << 0 ) != 0 )
-//					g.addEdge( i + "-" + ( i - labels.dimension( 0 ) ), "" + i, "" + ( i - labels.dimension( 0 ) ), true );
-//
-//			}
-		}
-
-		g.display( false );
-
-		final TLongArrayList roots = rootsAndCounts.getA();
 		System.out.println( Arrays.toString( rootsAndCounts.getB() ) );
 
-		for ( final TLongIterator it = roots.iterator(); it.hasNext(); )
-			System.out.println( "root: " + it.next() );
+
+		final long highBit = 1l << 63;
+		final long secondHighBit = 1l << 62;
 
 
 		final long[] steps = AffinityWatershed2.generateSteps( AffinityWatershed2.generateStride( labels ) );
 
-		final ArrayList< WeightedEdge< LongType, DoubleType > > rg =
+		final ArrayList< WeightedEdge > rg =
 				AffinityWatershed2.generateRegionGraph(
 						input,
 						labels,
 						steps,
 						( f, s ) -> f.getRealDouble() < s.getRealDouble(),
-						new DoubleType( Double.MAX_VALUE ) );
+						new DoubleType( Double.MAX_VALUE ),
+						highBit,
+						secondHighBit,
+						rootsAndCounts.getB().length );
 
-		for ( final WeightedEdge< LongType, DoubleType > w : rg )
+		for ( final WeightedEdge w : rg )
 			System.out.println(w);
 
 //		final short val = ( short ) 255;

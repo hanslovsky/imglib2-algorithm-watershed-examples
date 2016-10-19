@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
 	print (np.min(data), np.max(data))
 
-	pred = zw.zwatershed(data, [-1])
+	pred = zw.zwatershed(data, [50000])
 
 	if o:
 		with h5py.File(o, 'w') as f:

@@ -9,6 +9,7 @@ import org.graphstream.graph.Node;
 import org.graphstream.graph.implementations.MultiGraph;
 
 import gnu.trove.list.array.TLongArrayList;
+import gnu.trove.map.hash.TLongDoubleHashMap;
 import ij.ImageJ;
 import net.imglib2.Cursor;
 import net.imglib2.Dimensions;
@@ -230,7 +231,7 @@ public class AffinityViewWatershed3D
 
 		final long[] steps = AffinityWatershed2.generateSteps( AffinityWatershed2.generateStride( labels ) );
 
-		final ArrayList< WeightedEdge > rg =
+		final TLongDoubleHashMap rgMap =
 				AffinityWatershed2.generateRegionGraph(
 						input,
 						labels,
@@ -240,6 +241,8 @@ public class AffinityViewWatershed3D
 						highBit,
 						secondHighBit,
 						rootsAndCounts.getB().length );
+
+		final ArrayList< WeightedEdge > rg = AffinityWatershed2.graphToList( rgMap, rootsAndCounts.getB().length );
 
 		for ( final WeightedEdge w : rg )
 			System.out.println(w);

@@ -9,6 +9,7 @@ import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionListener;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -19,6 +20,7 @@ import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
 import bdv.viewer.ViewerPanel;
 import gnu.trove.list.array.TLongArrayList;
+import gnu.trove.map.hash.TLongDoubleHashMap;
 import gnu.trove.map.hash.TLongIntHashMap;
 import net.imglib2.RealRandomAccess;
 import net.imglib2.algorithm.morphology.watershed.AffinityWatershed2;
@@ -95,19 +97,6 @@ public class AffinityViewWatershedTEM2
 
 		final ArrayImg< LongType, LongArray > labels = ArrayImgs.longs( labelsDims );
 
-//		final RandomAccess< RealComposite< DoubleType > > affsAcc = affsView.randomAccess();
-//		System.out.println( Arrays.toString( Intervals.dimensionsAsLongArray( affsCollapsed ) ) );
-//		affsAcc.setPosition( new long[] { 39, 1, 99 } );
-//		for ( int d = 0; d < 6; ++d )
-//			System.out.println( "aff = " + affsAcc.get().get( d ) );
-//
-//		final OutOfBounds< RealComposite< DoubleType > > acc2 = Views.extendValue( affsCollapsed, extension ).randomAccess();
-//		acc2.setPosition( new long[] { 39, 1, 100 } );
-//		for ( int i = 0; i < 3; ++i )
-//			System.out.println( "gff = " + acc2.get().get( i ) + " , ");
-//
-//		System.exit( 0 );
-
 		final ValuePair< TLongArrayList, long[] > rootsAndCounts = AffinityWatershed2.letItRain(
 				affsView,
 				labels,
@@ -125,7 +114,7 @@ public class AffinityViewWatershedTEM2
 		final long highBit = 1l << 63;
 		final long secondHighBit = 1l << 62;
 
-		final ArrayList< WeightedEdge > rg = AffinityWatershed2.generateRegionGraph(
+		final TLongDoubleHashMap rgMap = AffinityWatershed2.generateRegionGraph(
 				affsView,
 				labels,
 				steps,
@@ -138,59 +127,15 @@ public class AffinityViewWatershedTEM2
 		final long sizeThreshold = 50000;
 
 
-		final DisjointSets dj = new DisjointSets( counts.length );
 
-
-
-
+		final ArrayList< WeightedEdge > rg = AffinityWatershed2.graphToList( rgMap, counts.length );
+		Collections.sort( rg, Collections.reverseOrder() );
 
 		System.out.println( "Merging graph!" );
-		for ( final WeightedEdge edge : rg )
-		{
 
-			final double val = edge.getV();
-
-			final double valSquared = val * val * sizeThreshold;
-
-			if ( val < 1e-4 )
-				break;
-
-			final int id1 = dj.findRoot( ( int ) edge.getFirst() );
-			final int id2 = dj.findRoot( ( int ) edge.getSecond() );
-//			if ( val > 0.5 )
-
-			if ( id1 != id2 && id1 > 0 && id2 > 0 )
-				if ( Math.min( counts[id1], counts[id2] ) < valSquared ) {
-					final int newId = dj.join( id1, id2 );
-					final int otherId = newId == id1 ? id2 : id1;
-					counts[ newId ] = counts[ newId ] + counts[ otherId ];
-					counts[ otherId ] = 0;
-//					System.out.println( id1 + " " + id2 + " " + newId + " : " + counts[ id1 ] + " " + counts[ id2 ] + " " + counts[ newId ] );
-//					break;
-
-//					counts[ id1 ] += counts[ id2 ];
-//					counts[ id2 ] = 0;
-//					final long tmpCount = counts[ id1 ];
-//					counts[ id1 ] = counts[ newId ];
-//					counts[ newId ] = tmpCount;
-
-//					if ( id2 < id1 )
-//						System.out.println( id1 + " " + id2 + " " + newId + " " + counts[id1] + " " + counts[id2] + " " + counts[newId] + " " + edge);
-//
-//					if ( id1 != newId )
-//					{
-//						System.out.println( "MIZZZGE!" );
-//						break;
-//					}
-				}
-
-		}
-
-//		final TLongArrayList roots = AffinityWatershed.watershed( affsView, labels, compare, new DoubleType( Double.MAX_VALUE ), new LongType( -1 ) );
+		final DisjointSets dj = AffinityWatershed2.mergeRegionGraph( rg, counts, ( v1, v2 ) -> v1 < v2, ( v ) -> v < 0.001 ? Double.NaN : v * v * sizeThreshold );
 
 		System.out.println( "Got roots! " + dj.setCount() + " " + counts.length );
-
-//		BdvFunctions.show( labels, "labels" );
 
 		final TLongIntHashMap colors = new TLongIntHashMap();
 		final Random rng = new Random( 100 );

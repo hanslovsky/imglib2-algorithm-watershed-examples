@@ -40,8 +40,8 @@ public class ShowZWPred
 	public static void main( final String[] args )
 	{
 		final String probPath = Util.HOME_DIR + "/Dropbox/misc/excerpt.h5";
-		final String predPath = Util.HOME_DIR + "/Dropbox/misc/excerpt-pred.h5";
-//		final String predPath = Util.HOME_DIR + "/local/tmp/zw.h5";
+//		final String predPath = Util.HOME_DIR + "/Dropbox/misc/excerpt-pred.h5";
+		final String predPath = Util.HOME_DIR + "/local/tmp/zwat.h5";
 
 		final long[] dims = new long[] { 300, 300, 100, 3 };
 		final long[] labelsDims = new long[] { 300, 300, 100 };
@@ -62,7 +62,7 @@ public class ShowZWPred
 		bdv.getBdvHandle().getViewerPanel().getDisplay().addOverlayRenderer( vdl );
 		bdv.getBdvHandle().getViewerPanel().getDisplay().addMouseMotionListener( vdl );
 
-		final CellImg< LongType, ?, ? > pred0 = H5Utils.loadUnsignedLong( predPath, "pred1", new int[] { 300, 300, 100 } );
+		final CellImg< LongType, ?, ? > pred0 = H5Utils.loadUnsignedLong( predPath, "pred", new int[] { 300, 300, 100 } );
 
 //		BdvFunctions.show( pred0, "pred0" );
 

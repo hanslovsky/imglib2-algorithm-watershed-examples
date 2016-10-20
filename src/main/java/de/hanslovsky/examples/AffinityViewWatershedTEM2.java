@@ -127,42 +127,53 @@ public class AffinityViewWatershedTEM2
 		final long sizeThreshold = 50000;
 
 
+		final BdvStackSource< ARGBType > bdv = BdvFunctions.show( new ConvertedRandomAccessibleInterval<>( Views.collapseReal( affs ), ( s, t ) -> {
+			t.set( ARGBType.rgba( 255 * tf( s.get( 0 ).get() ), 255 * tf( s.get( 1 ).get() ), 255 * tf( s.get( 2 ).get() ), 255.0 ) );
+		}, new ARGBType() ), "affs" );
+
+
 
 		final ArrayList< WeightedEdge > rg = AffinityWatershed2.graphToList( rgMap, counts.length );
 		Collections.sort( rg, Collections.reverseOrder() );
 
 		System.out.println( "Merging graph!" );
 
-		final DisjointSets dj = AffinityWatershed2.mergeRegionGraph( rg, counts, ( v1, v2 ) -> v1 < v2, ( v ) -> v < 0.001 ? Double.NaN : v * v * sizeThreshold );
+//		final DisjointSets dj = AffinityWatershed2.mergeRegionGraph( rg, counts, ( v1, v2 ) -> v1 < v2, ( v ) -> v < 0.001 ? Double.NaN : v * v * sizeThreshold );
 
-		System.out.println( "Got roots! " + dj.setCount() + " " + counts.length );
+		final double[] thresholds = new double[] { 10, 100, 1000, 10000, 10000, 50000, 150000, 1000000 };
+		final DisjointSets[] djs = AffinityWatershed2.mergeRegionGraph( rg, counts, ( v1, v2 ) -> v1 < v2, thresholds );
 
-		final TLongIntHashMap colors = new TLongIntHashMap();
-		final Random rng = new Random( 100 );
+		for ( int d = 0; d < djs.length; ++d )
 		{
-			colors.put( 0, 0 );
-			for ( int i = 1; i < counts.length; ++i )
+
+			final DisjointSets dj = djs[ d ];
+
+			System.out.println( "Got roots! " + dj.setCount() + " " + counts.length );
+
+			final TLongIntHashMap colors = new TLongIntHashMap();
+			final Random rng = new Random( 100 );
 			{
-				final long root = dj.findRoot( i );
-				if ( !colors.contains( root ) )
-					colors.put( root, rng.nextInt() );
+				colors.put( 0, 0 );
+				for ( int i = 1; i < counts.length; ++i )
+				{
+					final long root = dj.findRoot( i );
+					if ( !colors.contains( root ) )
+						colors.put( root, rng.nextInt() );
+				}
 			}
+
+
+			final ConvertedRandomAccessibleInterval< LongType, ARGBType > colored = new ConvertedRandomAccessibleInterval<>(
+					labels, ( s, t ) -> {
+						t.set( colors.get( dj.findRoot( ( int ) s.getIntegerLong() ) ) );
+					}, new ARGBType() );
+
+
+
+			BdvFunctions.show( colored, "colored labels " + thresholds[ d ], BdvOptions.options().addTo( bdv ) );
+
+			System.out.println( "cnt: " + dj.setCount() );
 		}
-
-
-		final ConvertedRandomAccessibleInterval< LongType, ARGBType > colored = new ConvertedRandomAccessibleInterval<>(
-				labels, ( s, t ) -> {
-					t.set( colors.get( dj.findRoot( ( int ) s.getIntegerLong() ) ) );
-				}, new ARGBType() );
-
-
-		final BdvStackSource< ARGBType > bdv = BdvFunctions.show( new ConvertedRandomAccessibleInterval<>( Views.collapseReal( affs ), ( s, t ) -> {
-			t.set( ARGBType.rgba( 255 * tf( s.get( 0 ).get() ), 255 * tf( s.get( 1 ).get() ), 255 * tf( s.get( 2 ).get() ), 255.0 ) );
-		}, new ARGBType() ), "affs" );
-
-		BdvFunctions.show( colored, "colored labels", BdvOptions.options().addTo( bdv ) );
-
-		System.out.println( "cnt: " + dj.setCount() );
 
 		final RealRandomAccess< RealComposite< DoubleType > > rra = Views.interpolate( Views.extendBorder( Views.collapseReal( affs ) ), new NearestNeighborInterpolatorFactory<>() ).realRandomAccess();
 

@@ -1,12 +1,12 @@
 package de.hanslovsky.examples;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 
 import org.graphstream.graph.Node;
 import org.graphstream.graph.implementations.MultiGraph;
+import org.mastodon.collection.ref.RefArrayList;
 
 import gnu.trove.list.array.TLongArrayList;
 import gnu.trove.map.hash.TLongDoubleHashMap;
@@ -242,7 +242,7 @@ public class AffinityViewWatershed3D
 						secondHighBit,
 						rootsAndCounts.getB().length );
 
-		final ArrayList< WeightedEdge > rg = AffinityWatershed2.graphToList( rgMap, rootsAndCounts.getB().length );
+		final RefArrayList< WeightedEdge > rg = AffinityWatershed2.graphToList( rgMap, rootsAndCounts.getB().length );
 
 		for ( final WeightedEdge w : rg )
 			System.out.println(w);

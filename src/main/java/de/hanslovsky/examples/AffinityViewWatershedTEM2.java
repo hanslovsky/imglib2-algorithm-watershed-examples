@@ -7,18 +7,21 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionListener;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 
+import org.mastodon.collection.ref.RefArrayList;
+
 import bdv.img.h5.H5Utils;
 import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
+import bdv.viewer.DisplayMode;
 import bdv.viewer.ViewerPanel;
+import bdv.viewer.VisibilityAndGrouping;
 import gnu.trove.list.array.TLongArrayList;
 import gnu.trove.map.hash.TLongDoubleHashMap;
 import gnu.trove.map.hash.TLongIntHashMap;
@@ -131,14 +134,15 @@ public class AffinityViewWatershedTEM2
 			t.set( ARGBType.rgba( 255 * tf( s.get( 0 ).get() ), 255 * tf( s.get( 1 ).get() ), 255 * tf( s.get( 2 ).get() ), 255.0 ) );
 		}, new ARGBType() ), "affs" );
 
+		final VisibilityAndGrouping vag = bdv.getBdvHandle().getViewerPanel().getVisibilityAndGrouping();
+		vag.setDisplayMode( DisplayMode.GROUP );
 
 
-		final ArrayList< WeightedEdge > rg = AffinityWatershed2.graphToList( rgMap, counts.length );
+		final RefArrayList< WeightedEdge > rg = AffinityWatershed2.graphToList( rgMap, counts.length );
+		rg.get( 0 );
 		Collections.sort( rg, Collections.reverseOrder() );
 
 		System.out.println( "Merging graph!" );
-
-//		final DisjointSets dj = AffinityWatershed2.mergeRegionGraph( rg, counts, ( v1, v2 ) -> v1 < v2, ( v ) -> v < 0.001 ? Double.NaN : v * v * sizeThreshold );
 
 		final double[] thresholds = new double[] { 10, 100, 1000, 10000, 10000, 50000, 150000, 1000000 };
 		final DisjointSets[] djs = AffinityWatershed2.mergeRegionGraph( rg, counts, ( v1, v2 ) -> v1 < v2, thresholds );
@@ -169,10 +173,12 @@ public class AffinityViewWatershedTEM2
 					}, new ARGBType() );
 
 
-
 			BdvFunctions.show( colored, "colored labels " + thresholds[ d ], BdvOptions.options().addTo( bdv ) );
 
-			System.out.println( "cnt: " + dj.setCount() );
+			vag.addSourceToGroup( 0, d );
+			vag.addSourceToGroup( d + 1, d );
+
+			System.out.println( "cnt: " + dj.setCount() + " " + vag.numGroups() + " " + vag.numSources() );
 		}
 
 		final RealRandomAccess< RealComposite< DoubleType > > rra = Views.interpolate( Views.extendBorder( Views.collapseReal( affs ) ), new NearestNeighborInterpolatorFactory<>() ).realRandomAccess();

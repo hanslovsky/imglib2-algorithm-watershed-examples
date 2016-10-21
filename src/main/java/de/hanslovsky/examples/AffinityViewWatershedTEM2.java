@@ -22,7 +22,6 @@ import bdv.util.BdvStackSource;
 import bdv.viewer.DisplayMode;
 import bdv.viewer.ViewerPanel;
 import bdv.viewer.VisibilityAndGrouping;
-import gnu.trove.list.array.TLongArrayList;
 import gnu.trove.map.hash.TLongDoubleHashMap;
 import gnu.trove.map.hash.TLongIntHashMap;
 import net.imglib2.RealRandomAccess;
@@ -47,7 +46,6 @@ import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.ui.OverlayRenderer;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
-import net.imglib2.util.ValuePair;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 import net.imglib2.view.composite.CompositeIntervalView;
@@ -96,29 +94,47 @@ public class AffinityViewWatershedTEM2
 
 		final CompareBetter< DoubleType > comp = ( t1, t2 ) -> t1.get() > t2.get();
 
-		final AffinityView< DoubleType, RealComposite< DoubleType > > affsView = new AffinityView<>( Views.extendValue( affsCollapsed, extension ), compFac );
-
 		final ArrayImg< LongType, LongArray > labels = ArrayImgs.longs( labelsDims );
 
-		final ValuePair< TLongArrayList, long[] > rootsAndCounts = AffinityWatershed2.letItRain(
-				affsView,
+		final AffinityView< DoubleType, RealComposite< DoubleType > > affsView = new AffinityView<>( Views.extendValue( affsCollapsed, extension ), compFac );
+
+		final ArrayImg< DoubleType, DoubleArray > affsCopy = ArrayImgs.doubles( dimsWithEdges );
+
+		for ( final Pair< RealComposite< DoubleType >, RealComposite< DoubleType > > p : Views.flatIterable( Views.interval( Views.pair( affsView, Views.collapseReal( affsCopy ) ), labels ) ) )
+			p.getB().set( p.getA() );
+
+		final int nThreads = 2;
+		final int nWarmup = 3;
+
+		for ( int i = 0; i < nWarmup; ++i )
+			AffinityWatershed2.letItRain(
+					Views.collapseReal( affsCopy ),
+					ArrayImgs.longs( labelsDims ),
+					comp,
+					new DoubleType( -Double.MAX_VALUE ),
+					Executors.newFixedThreadPool( nThreads ),
+					nThreads,
+					() -> {} );
+
+		System.out.println();
+		final long[] counts = AffinityWatershed2.letItRain(
+				Views.collapseReal( affsCopy ),
 				labels,
 				comp,
 				new DoubleType( -Double.MAX_VALUE ),
-				Executors.newFixedThreadPool( 1 ),
-				1,
+				Executors.newFixedThreadPool( nThreads ),
+				nThreads,
 				() -> {} );
+
 
 		final long[] strides = AffinityWatershed2.generateStride( labels );
 		final long[] steps = AffinityWatershed2.generateSteps( strides );
-
-		final long[] counts = rootsAndCounts.getB();
 
 		final long highBit = 1l << 63;
 		final long secondHighBit = 1l << 62;
 
 		final TLongDoubleHashMap rgMap = AffinityWatershed2.generateRegionGraph(
-				affsView,
+				Views.collapseReal( affsCopy ),
 				labels,
 				steps,
 				comp,
@@ -127,7 +143,7 @@ public class AffinityViewWatershedTEM2
 				secondHighBit,
 				counts.length );
 
-		final long sizeThreshold = 50000;
+		System.out.println( rgMap.size() + " edges" );
 
 
 		final BdvStackSource< ARGBType > bdv = BdvFunctions.show( new ConvertedRandomAccessibleInterval<>( Views.collapseReal( affs ), ( s, t ) -> {

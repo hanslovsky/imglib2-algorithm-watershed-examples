@@ -8,7 +8,6 @@ import org.graphstream.graph.Node;
 import org.graphstream.graph.implementations.MultiGraph;
 import org.mastodon.collection.ref.RefArrayList;
 
-import gnu.trove.list.array.TLongArrayList;
 import gnu.trove.map.hash.TLongDoubleHashMap;
 import ij.ImageJ;
 import net.imglib2.Cursor;
@@ -31,7 +30,6 @@ import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
-import net.imglib2.util.ValuePair;
 import net.imglib2.view.Views;
 import net.imglib2.view.composite.CompositeView;
 import net.imglib2.view.composite.RealComposite;
@@ -206,7 +204,7 @@ public class AffinityViewWatershed3D
 			}
 		};
 
-		final ValuePair< TLongArrayList, long[] > rootsAndCounts = AffinityWatershed2.letItRain(
+		final long[] counts = AffinityWatershed2.letItRain(
 				input,
 				labels,
 				( f, s ) -> f.getRealDouble() < s.getRealDouble(),
@@ -222,7 +220,7 @@ public class AffinityViewWatershed3D
 		}, new LongType() ) );
 //		ImageJFunctions.show( labels );
 
-		System.out.println( Arrays.toString( rootsAndCounts.getB() ) );
+		System.out.println( Arrays.toString( counts ) );
 
 
 		final long highBit = 1l << 63;
@@ -240,9 +238,9 @@ public class AffinityViewWatershed3D
 						new DoubleType( Double.MAX_VALUE ),
 						highBit,
 						secondHighBit,
-						rootsAndCounts.getB().length );
+						counts.length );
 
-		final RefArrayList< WeightedEdge > rg = AffinityWatershed2.graphToList( rgMap, rootsAndCounts.getB().length );
+		final RefArrayList< WeightedEdge > rg = AffinityWatershed2.graphToList( rgMap, counts.length );
 
 		for ( final WeightedEdge w : rg )
 			System.out.println(w);

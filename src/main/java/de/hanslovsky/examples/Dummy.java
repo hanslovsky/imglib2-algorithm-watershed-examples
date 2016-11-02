@@ -6,6 +6,7 @@ import org.apache.commons.lang.StringUtils;
 import org.mastodon.collection.ref.RefArrayList;
 
 import bdv.util.ConstantRandomAccessible;
+import gnu.trove.map.hash.TLongDoubleHashMap;
 import net.imglib2.Cursor;
 import net.imglib2.Point;
 import net.imglib2.RandomAccess;
@@ -43,6 +44,10 @@ public class Dummy
 
 		for ( int i = 0; i < list.size(); ++i )
 			System.out.println( "Has " + list.get( i ) );
+
+		final TLongDoubleHashMap tldhm = new TLongDoubleHashMap();
+		tldhm.put( 1, 3.0 );
+		tldhm.put( 2, 2.0 );
 
 	}
 }

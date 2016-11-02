@@ -21,7 +21,21 @@ if __name__ == "__main__":
 
 	print (np.min(data), np.max(data))
 
+	affs = np.asfortranarray(np.transpose(data, (1, 2, 3, 0)))
+	dims = affs.shape
+	seg_empty = np.empty((dims[0], dims[1], dims[2]), dtype=np.uint32)
+	print( dir (zw))
+	print (zw)
+	mp = zw.zwshed_initial(seg_empty, affs)
+
+	print(mp['counts'])
+	print('count sum: ', np.sum(mp['counts']))
+
 	pred = zw.zwatershed(data, [50000])
+
+	
+
+	
 
 	if o:
 		with h5py.File(o, 'w') as f:

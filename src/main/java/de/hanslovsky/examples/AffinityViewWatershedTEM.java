@@ -22,7 +22,7 @@ import net.imglib2.Point;
 import net.imglib2.RealRandomAccess;
 import net.imglib2.algorithm.gradient.PartialDerivative;
 import net.imglib2.algorithm.morphology.watershed.AffinityWatershed;
-import net.imglib2.algorithm.morphology.watershed.AffinityWatershed.CompareBetter;
+import net.imglib2.algorithm.morphology.watershed.CompareBetter;
 import net.imglib2.algorithm.morphology.watershed.affinity.AffinityView;
 import net.imglib2.algorithm.morphology.watershed.affinity.CompositeFactory;
 import net.imglib2.converter.RealDoubleConverter;

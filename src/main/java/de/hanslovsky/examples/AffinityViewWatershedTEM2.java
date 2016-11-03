@@ -122,7 +122,7 @@ public class AffinityViewWatershedTEM2
 		for ( final Pair< RealComposite< DoubleType >, RealComposite< DoubleType > > p : Views.flatIterable( Views.interval( Views.pair( affsView, Views.collapseReal( affsCopy ) ), labels ) ) )
 			p.getB().set( p.getA() );
 
-		final int nThreads = 1;
+		final int nThreads = Runtime.getRuntime().availableProcessors();
 		final int nWarmup = 0;
 
 		System.out.println( "Warming up..." );
@@ -218,7 +218,7 @@ public class AffinityViewWatershedTEM2
 
 		System.out.println( "Merging graph!" );
 
-		final double[] thresholds = new double[] { -1.0, 100, 1000, 10000, 10000, 50000, 150000, 1000000 };
+		final double[] thresholds = new double[] { -1.0, 100, 1000, 10000, 50000, 150000, 1000000 };
 //		final double[] thresholds = new double[] { 1e4 };
 		final DisjointSets[] djs = AffinityWatershed2.mergeRegionGraph(
 				rg,
@@ -261,6 +261,13 @@ public class AffinityViewWatershedTEM2
 			System.out.println( "cnt: " + dj.setCount() + " " + vag.numGroups() + " " + vag.numSources() );
 		}
 
+//		final RandomAccessibleInterval< LongType > accessible = Converters.convert(
+//				( RandomAccessibleInterval< LongType > ) labels,
+//				( s, t ) -> {
+//					t.set( djs[ vag.getCurrentGroup() ].findRoot( s.getInteger() ) );
+//				},
+//				new LongType() );
+
 		final RealRandomAccess< RealComposite< DoubleType > > rra = Views.interpolate( Views.extendBorder( Views.collapseReal( affs ) ), new NearestNeighborInterpolatorFactory<>() ).realRandomAccess();
 
 		final ValueDisplayListener< RealComposite< DoubleType > > vdl = new ValueDisplayListener<>(
@@ -272,7 +279,7 @@ public class AffinityViewWatershedTEM2
 
 		final ConvertedRandomAccessibleInterval< LongType, LongType > rooted = new ConvertedRandomAccessibleInterval<>(
 				labels, ( s, t ) -> {
-					t.set( djs[ 0 ].findRoot( s.getInteger() ) );
+					t.set( vag.getCurrentGroup() >= djs.length ? -1 : djs[ vag.getCurrentGroup() ].findRoot( s.getInteger() ) );
 				}, new LongType() );
 
 		final RealRandomAccess< LongType > rootedRra = Views.interpolate( Views.extendValue( rooted, new LongType( -1 ) ), new NearestNeighborInterpolatorFactory<>() ).realRandomAccess();

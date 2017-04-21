@@ -1,10 +1,12 @@
 package de.hanslovsky.examples;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import ij.ImageJ;
 import ij.ImagePlus;
 import net.imglib2.Cursor;
+import net.imglib2.FinalInterval;
 import net.imglib2.Localizable;
 import net.imglib2.Point;
 import net.imglib2.RandomAccess;
@@ -16,6 +18,7 @@ import net.imglib2.algorithm.morphology.watershed.Distance;
 import net.imglib2.algorithm.morphology.watershed.PriorityQueueFactory;
 import net.imglib2.algorithm.morphology.watershed.PriorityQueueFastUtil;
 import net.imglib2.algorithm.morphology.watershed.Watershed;
+import net.imglib2.algorithm.morphology.watershed.Watersheds;
 import net.imglib2.algorithm.neighborhood.DiamondShape;
 import net.imglib2.algorithm.neighborhood.Neighborhood;
 import net.imglib2.algorithm.neighborhood.RectangleShape;
@@ -74,21 +77,12 @@ public class WatershedsExampleSimple
 				g.get().set( 255.0 );
 		}
 
-		final ArrayImg< LongType, LongArray > markersWrapped = ArrayImgs.longs( markers, w, h );
-		final ArrayRandomAccess< LongType > acc = markersWrapped.randomAccess();
-
-		acc.setPosition( new int[] { 0, 1 } );
-		acc.get().set( 1 );
-		acc.setPosition( new int[] { 1, 0 } );
-		acc.get().set( 2 );
-
 		final DiamondShape shape = new DiamondShape( 1 );
-//		final RectangleShape shape = new RectangleShape( 1, true );
 
-		final Watershed.StoreageFactory< LongType > fac = ( final long size, final LongType t ) -> ArrayImgs.longs( size );
+		final Watershed.StoreageFactory< LongType > fac = (final long size, final LongType t ) -> ArrayImgs.longs( size );
 
 		final double weight = 0.00;
-		final Distance< DoubleType > dist = ( comparison, reference, position, seedPosition, numberOfSteps ) -> comparison.get() + weight * numberOfSteps;
+		final Watersheds.WatershedDistance< DoubleType > dist = ( comparison, reference ) -> comparison.get();
 //		final Distance< DoubleType > dist =
 //				( comparison, reference, position, seedPosition, numberOfSteps ) -> comparison.get() + weight * Math.sqrt( euclidianSquared( position, seedPosition, dim ) );
 
@@ -97,15 +91,21 @@ public class WatershedsExampleSimple
 //		final PriorityQueueFactory fac2 = new HierarchicalPriorityQueueIntHeaps.Factory( 1024 * 4 );
 		final PriorityQueueFactory fac2 = PriorityQueueFastUtil.FACTORY;
 
-		Watershed.flood(
+		ArrayList< Localizable > seeds = new ArrayList<>();
+		seeds.add( new Point( 0, 1 ) );
+		seeds.add( new Point( 1, 0 ) );
+
+		Watersheds.flood(
 				gradient,
-				ArrayImgs.longs( markers, w, h ),
+				Views.extendValue( ArrayImgs.longs( markers, w, h ), new LongType( -1 ) ),
+				new FinalInterval( w, h ),
+				seeds,
 				shape,
-				new LongType( 0l ),
-				new LongType( -1l ),
 				dist,
-				fac,
-				fac2 );
+				new ArrayImgFactory< LongType >(),
+				fac2,
+				new LongType( 0l ),
+				new Watersheds.DefaultIdService( 1 ) );
 		ImageJFunctions.show( ArrayImgs.longs( markers, w, h ) );
 //		final LongType bg = markersWrapped.firstElement().createVariable();
 //		bg.set( -1l );

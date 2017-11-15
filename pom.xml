@@ -6,7 +6,7 @@
   <artifactId>imglib2-algorithm-watershed-examples</artifactId>
   <version>0.0.1-SNAPSHOT</version>
   
-  <name>vis</name>
+  <name>imglib2 algorithm watershed examples</name>
   <url>http://maven.apache.org</url>
   
   <properties>

@@ -13,9 +13,9 @@ import net.imglib2.FinalInterval;
 import net.imglib2.Point;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.algorithm.morphology.watershed.AffinityWatersheds;
 import net.imglib2.algorithm.morphology.watershed.HierarchicalPriorityQueueIntHeaps;
 import net.imglib2.algorithm.morphology.watershed.PriorityQueueFactory;
-import net.imglib2.algorithm.morphology.watershed.Watersheds;
 import net.imglib2.algorithm.neighborhood.DiamondShape;
 import net.imglib2.converter.Converters;
 import net.imglib2.exception.IncompatibleTypeException;
@@ -31,8 +31,9 @@ import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Pair;
 import net.imglib2.view.Views;
+import net.imglib2.view.composite.GenericComposite;
 
-public class WatershedsExample2DGeneric
+public class AffinityWatershedsExample2DGeneric
 {
 
 	public static double euclidianSquared( final long pos1, final long pos2, final long[] dim )
@@ -74,6 +75,7 @@ public class WatershedsExample2DGeneric
 				.range( 0, shifts.length )
 				.mapToObj( i -> Util.gradientsAndMagnitudeNoExcept( Converters.convert( source, ( s, t ) -> t.set( weights[ i ] * ( s.get() >>> shifts[ i ] & 0xff ) ), new DoubleType() ), sigma ) )
 				.toArray( ArrayImg[][]::new );
+
 		final double[] img = new double[ imp.getWidth() * imp.getHeight() ];
 
 		final ArrayCursor< DoubleType >[] c = Arrays.stream( gradients ).map( g -> g[ 2 ] ).map( ArrayImg::cursor ).toArray( n -> new ArrayCursor[ n ] );
@@ -99,29 +101,11 @@ public class WatershedsExample2DGeneric
 		ImageJFunctions.show( gradients[ 0 ][ 2 ], "grad 1" );
 		ImageJFunctions.show( gradients[ 1 ][ 2 ], "grad 2" );
 		ImageJFunctions.show( gradients[ 2 ][ 2 ], "grad 3" );
-		final int N = 1;
-		long rtAccu = 0;
-		for ( int i = 0; i < N; ++i )
-		{
-			final long[] markersCl = markers.clone();
-			final long t0 = System.currentTimeMillis();
-			Watersheds.flood(
-					( RandomAccessible< DoubleType > ) Views.extendValue( ArrayImgs.doubles( img, imp.getWidth(), imp.getHeight() ), new DoubleType( Double.POSITIVE_INFINITY ) ),
-					( RandomAccessible< LongType > ) Views.extendValue( ArrayImgs.longs( markersCl, imp.getWidth(), imp.getHeight() ), new LongType( 0l ) ),
-					new FinalInterval( imp.getWidth(), imp.getHeight() ),
-					locations,
-					shape,
-					fac2 );
-			final long t1 = System.currentTimeMillis();
-			final long rt = t1 - t0;
-			if ( i > 0 )
-				rtAccu += rt;
-			System.out.println( "Runtime : " + rt );
-		}
-		System.out.println( rtAccu * 1.0 / N );
 
-		Watersheds.flood(
-				( RandomAccessible< DoubleType > ) Views.extendValue( ArrayImgs.doubles( img, imp.getWidth(), imp.getHeight() ), new DoubleType( Double.POSITIVE_INFINITY ) ),
+		final RandomAccessibleInterval< GenericComposite< DoubleType > > affinities = Util.toAffinities( ArrayImgs.doubles( img, imp.getWidth(), imp.getHeight() ), shape );
+
+		AffinityWatersheds.flood(
+				affinities,
 				( RandomAccessible< LongType > ) Views.extendValue( ArrayImgs.longs( markers, imp.getWidth(), imp.getHeight() ), new LongType( 0l ) ),
 				new FinalInterval( imp.getWidth(), imp.getHeight() ),
 				locations,
@@ -180,5 +164,7 @@ public class WatershedsExample2DGeneric
 		imp2.show();
 
 	}
+
+
 
 }

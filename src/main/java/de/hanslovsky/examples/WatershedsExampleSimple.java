@@ -2,6 +2,7 @@ package de.hanslovsky.examples;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.ToDoubleBiFunction;
 
 import ij.ImageJ;
 import ij.ImagePlus;
@@ -14,10 +15,8 @@ import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.algorithm.gauss3.Gauss3;
 import net.imglib2.algorithm.gradient.PartialDerivative;
-import net.imglib2.algorithm.morphology.watershed.Distance;
 import net.imglib2.algorithm.morphology.watershed.PriorityQueueFactory;
 import net.imglib2.algorithm.morphology.watershed.PriorityQueueFastUtil;
-import net.imglib2.algorithm.morphology.watershed.Watershed;
 import net.imglib2.algorithm.morphology.watershed.Watersheds;
 import net.imglib2.algorithm.neighborhood.DiamondShape;
 import net.imglib2.algorithm.neighborhood.Neighborhood;
@@ -28,37 +27,18 @@ import net.imglib2.img.array.ArrayCursor;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.img.array.ArrayRandomAccess;
 import net.imglib2.img.basictypeaccess.array.DoubleArray;
-import net.imglib2.img.basictypeaccess.array.LongArray;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.IntegerType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.LongType;
 import net.imglib2.type.numeric.real.DoubleType;
-import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Pair;
 import net.imglib2.view.Views;
 
 public class WatershedsExampleSimple
 {
-
-	public static double euclidianSquared( final long pos1, final long pos2, final long[] dim )
-	{
-		double dist = 0;
-		for ( int d = 0; d < dim.length; ++d )
-		{
-			final double diff = IntervalIndexer.indexToPosition( pos1, dim, d ) - IntervalIndexer.indexToPosition( pos2, dim, d );
-			dist += diff * diff;
-		}
-		return dist;
-	}
-
-	public static double square( final double val )
-	{
-		return val * val;
-	}
 
 	public static void main( final String[] args ) throws IncompatibleTypeException
 	{
@@ -79,10 +59,8 @@ public class WatershedsExampleSimple
 
 		final DiamondShape shape = new DiamondShape( 1 );
 
-		final Watershed.StoreageFactory< LongType > fac = (final long size, final LongType t ) -> ArrayImgs.longs( size );
-
 		final double weight = 0.00;
-		final Watersheds.WatershedDistance< DoubleType > dist = ( comparison, reference ) -> comparison.get();
+		final ToDoubleBiFunction< DoubleType, DoubleType > dist = ( comparison, reference ) -> comparison.get();
 //		final Distance< DoubleType > dist =
 //				( comparison, reference, position, seedPosition, numberOfSteps ) -> comparison.get() + weight * Math.sqrt( euclidianSquared( position, seedPosition, dim ) );
 
@@ -91,9 +69,13 @@ public class WatershedsExampleSimple
 //		final PriorityQueueFactory fac2 = new HierarchicalPriorityQueueIntHeaps.Factory( 1024 * 4 );
 		final PriorityQueueFactory fac2 = PriorityQueueFastUtil.FACTORY;
 
-		ArrayList< Localizable > seeds = new ArrayList<>();
+		final ArrayList< Localizable > seeds = new ArrayList<>();
 		seeds.add( new Point( 0, 1 ) );
 		seeds.add( new Point( 1, 0 ) );
+
+		// set initial labels
+		markers[ 1 ] = 1;
+		markers[ w ] = 2;
 
 		Watersheds.flood(
 				gradient,
@@ -101,11 +83,7 @@ public class WatershedsExampleSimple
 				new FinalInterval( w, h ),
 				seeds,
 				shape,
-				dist,
-				new ArrayImgFactory< LongType >(),
-				fac2,
-				new LongType( 0l ),
-				new Watersheds.DefaultIdService( 1 ) );
+				fac2 );
 		ImageJFunctions.show( ArrayImgs.longs( markers, w, h ) );
 //		final LongType bg = markersWrapped.firstElement().createVariable();
 //		bg.set( -1l );

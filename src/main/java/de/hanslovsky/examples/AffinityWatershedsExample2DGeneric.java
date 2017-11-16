@@ -59,11 +59,11 @@ public class AffinityWatershedsExample2DGeneric
 		new ImageJ();
 //		final String url = "http://img.autobytel.com/car-reviews/autobytel/11694-good-looking-sports-cars/2016-Ford-Mustang-GT-burnout-red-tire-smoke.jpg";
 //		final String url = "http://mediad.publicbroadcasting.net/p/wuwm/files/styles/medium/public/201402/LeAnn_Crowe.jpg";
-//		final String url = "https://www.dropbox.com/s/g4i5ey9yc281dif/bfly_crop.jpeg?raw=1";
+		final String url = "https://www.dropbox.com/s/g4i5ey9yc281dif/bfly_crop.jpeg?raw=1";
 //		final String url = "https://i.imgur.com/2rmtqab.jpg";
 //		final String url = "/home/hanslovskyp/local/tmp/butterfly.jpg";
 //		final String url = "https://i.imgur.com/Yk5M99Uh.jpg";
-		final String url = "https://i.imgur.com/ql8NRRWh.jpg";
+//		final String url = "https://i.imgur.com/ql8NRRWh.jpg";
 		final ImagePlus imp = new ImagePlus( url );
 
 		final int[] shifts = { 16, 8, 0 };
